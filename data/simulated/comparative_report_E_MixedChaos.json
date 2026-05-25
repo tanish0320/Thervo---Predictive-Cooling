@@ -1,0 +1,60 @@
+{
+    "predictive": {
+        "lead_time": {
+            "avg_lead_time_sec": 1.1335616438356164,
+            "max_lead_time_sec": 5,
+            "min_lead_time_sec": 1,
+            "missed_events": 0,
+            "false_positive_events": 1440,
+            "stabilization_success_rate": 1.0
+        },
+        "stabilization": {
+            "overshoot_severity": 3893.8164534702055,
+            "recovery_time_sec": 822,
+            "thermal_variance": 270.3965493754477,
+            "oscillation_amplitude": 283.8610595719143
+        },
+        "oscillation": {
+            "rapid_reversals": 67,
+            "thrashing_index": 1.1897407686632093,
+            "is_stable": false
+        },
+        "efficiency": {
+            "avg_cooling_cost_percent": 40.6792,
+            "cooling_performance_ratio": 0.8356,
+            "wasted_cooling_events": 6,
+            "efficiency_score": 200.48369450469298
+        }
+    },
+    "reactive": {
+        "lead_time": {
+            "avg_lead_time_sec": 1.0,
+            "max_lead_time_sec": 1,
+            "min_lead_time_sec": 1,
+            "missed_events": 0,
+            "false_positive_events": 1045,
+            "stabilization_success_rate": 1.0
+        },
+        "stabilization": {
+            "overshoot_severity": 9.704559196367157,
+            "recovery_time_sec": 7,
+            "thermal_variance": 148.86416419893828,
+            "oscillation_amplitude": 161.76270578115623
+        },
+        "oscillation": {
+            "rapid_reversals": 156,
+            "thrashing_index": 1.6760551399540629,
+            "is_stable": false
+        },
+        "efficiency": {
+            "avg_cooling_cost_percent": 58.0474,
+            "cooling_performance_ratio": 0.9986,
+            "wasted_cooling_events": 89,
+            "efficiency_score": 169.1183693100797
+        }
+    },
+    "comparison": {
+        "recovery_time_reduction_sec": 0,
+        "efficiency_improvement_percent": 18.546373952497586
+    }
+}

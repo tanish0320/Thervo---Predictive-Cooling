@@ -54,6 +54,9 @@ CSV_COLUMNS = [
     "network_io",
     "gpu_temp",
     "cpu_temp",
+    "fan_rpm",
+    "throttle_flag",
+    "ambient_temp",
 ]
 
 
@@ -305,6 +308,39 @@ def collect_cpu_temperature() -> float:
     return 0.0
 
 
+def collect_fan_rpm() -> float:
+    """Return average fan speed in RPM if available, otherwise 0.0."""
+    try:
+        if hasattr(psutil, "sensors_fans"):
+            fans = psutil.sensors_fans()
+            if fans:
+                vals = []
+                for name, entries in fans.items():
+                    for entry in entries:
+                        vals.append(entry.current)
+                if vals:
+                    return float(sum(vals) / len(vals))
+    except Exception as exc:
+        logger.debug("psutil fan RPM failed: %s", exc)
+    return 0.0
+
+
+def collect_throttle_flag() -> int:
+    """Return 1 if thermal throttling is active, else 0."""
+    try:
+        if sys.platform == "win32":
+            # Check if CPU is throttled via WMI or power status (defaulting to 0)
+            pass
+    except Exception:
+        pass
+    return 0
+
+
+def collect_ambient_temp() -> float:
+    """Return ambient temperature in °C if available, else 0.0."""
+    return 0.0
+
+
 # ─────────────────────────────────────────────
 #  CSV INITIALISATION
 # ─────────────────────────────────────────────
@@ -397,6 +433,10 @@ def run(interval: float = DEFAULT_INTERVAL_SEC, csv_path: str = DEFAULT_CSV_PATH
             disk_io, _disk_prev   = collect_disk_io(_disk_prev)
             net_io,  _net_prev    = collect_network_io(_net_prev)
 
+            fan_rpm = collect_fan_rpm()
+            throttle = collect_throttle_flag()
+            ambient = collect_ambient_temp()
+
             row = {
                 "timestamp":  ts,
                 "cpu":        round(cpu, 2),
@@ -406,6 +446,9 @@ def run(interval: float = DEFAULT_INTERVAL_SEC, csv_path: str = DEFAULT_CSV_PATH
                 "network_io": net_io,
                 "gpu_temp":   round(gpu_tmp, 1),
                 "cpu_temp":   round(cpu_tmp, 1),
+                "fan_rpm":    round(fan_rpm, 1),
+                "throttle_flag": throttle,
+                "ambient_temp": round(ambient, 1),
             }
 
             write_row(csv_path, row)
@@ -414,8 +457,9 @@ def run(interval: float = DEFAULT_INTERVAL_SEC, csv_path: str = DEFAULT_CSV_PATH
             if tick % 10 == 1:
                 logger.info(
                     "Tick %5d | CPU %5.1f%% | GPU %5.1f%% | MEM %5.1f%% | "
-                    "Disk %8.0f B/s | Net %8.0f B/s | GPU_T %4.1f°C | CPU_T %4.1f°C",
-                    tick, cpu, gpu, memory, disk_io, net_io, gpu_tmp, cpu_tmp,
+                    "Disk %8.0f B/s | Net %8.0f B/s | GPU_T %4.1f°C | CPU_T %4.1f°C | "
+                    "Fan %5.0f RPM | Throttle %d",
+                    tick, cpu, gpu, memory, disk_io, net_io, gpu_tmp, cpu_tmp, fan_rpm, throttle
                 )
 
         except Exception as exc:

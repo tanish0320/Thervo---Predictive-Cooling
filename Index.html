@@ -1,0 +1,2267 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>THERMAL_AI - Production Thermal Orchestration Platform</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        background: "#07080a",
+                        surface: "#0f1115",
+                        primary: "#00e5ff",
+                        "secondary-container": "#00fdee",
+                        "tertiary-container": "#ebb2ff",
+                        error: "#ff2a55"
+                    },
+                    fontFamily: {
+                        "body-base": ["Inter"],
+                        "label-caps": ["JetBrains Mono"],
+                        "display-lg": ["Geist"],
+                        "data-mono": ["JetBrains Mono"]
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+
+        body {
+            background-color: #07080a;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(0, 229, 255, 0.03) 0%, transparent 40%),
+                radial-gradient(circle at 100% 100%, rgba(255, 42, 85, 0.02) 0%, transparent 50%);
+            color: #e3e2e5;
+        }
+
+        /* Glassmorphism Panel styles with Subpixel Text Clarity */
+        .glass-panel {
+            position: relative;
+            z-index: 1;
+            isolation: isolate;
+            background: rgba(15, 17, 21, 0.45);
+            border: 1px solid rgba(0, 229, 255, 0.12);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02), 0 8px 32px rgba(0, 0, 0, 0.6);
+            /* Force independent hardware layout layer to prevent subpixel filter blur bugs */
+            transform: translate3d(0, 0, 0);
+            backface-visibility: hidden;
+            will-change: transform;
+        }
+        
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(15, 17, 21, 0.8) 0%, rgba(10, 11, 14, 0.95) 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: inherit;
+            z-index: -2;
+            pointer-events: none;
+        }
+
+        .glass-panel::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(to right, rgba(0, 229, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 229, 255, 0.02) 1px, transparent 1px);
+            background-size: 20px 20px;
+            pointer-events: none;
+            opacity: 0.3;
+            border-radius: inherit;
+            z-index: -1;
+        }
+
+        .micro-panel {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 4px;
+            box-shadow: inset 0 0 12px rgba(0,0,0,0.4);
+        }
+
+        /* Scan line animation overlay */
+        .scan-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(0, 229, 255, 0.3), transparent);
+            box-shadow: 0 0 8px rgba(0, 229, 255, 0.4);
+            animation: scan-down 6s linear infinite;
+            z-index: 10;
+            pointer-events: none;
+        }
+        @keyframes scan-down {
+            0% { top: 0; opacity: 0; }
+            5% { opacity: 1; }
+            95% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        .data-stream::-webkit-scrollbar { width: 4px; }
+        .data-stream::-webkit-scrollbar-track { background: rgba(255,255,255,0.01); }
+        .data-stream::-webkit-scrollbar-thumb { background: rgba(0, 229, 255, 0.3); border-radius: 4px; }
+        .data-stream::-webkit-scrollbar-thumb:hover { background: rgba(0, 253, 238, 0.6); }
+
+        .pulse-glow { animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 8px rgba(0, 229, 255, 0.2); }
+            50% { box-shadow: 0 0 16px rgba(0, 229, 255, 0.4); }
+        }
+
+        .pulse-cyan { animation: pulse-cyan 2.5s infinite; }
+        @keyframes pulse-cyan {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .pulse-error { animation: pulse-error 1.5s infinite; }
+        @keyframes pulse-error {
+            0%, 100% { box-shadow: 0 0 8px rgba(255, 42, 85, 0.2); opacity: 1; }
+            50% { box-shadow: 0 0 20px rgba(255, 42, 85, 0.5); opacity: 0.7; }
+        }
+
+        .spin-slow { animation: spin 12s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .event-enter {
+            animation: slide-in 0.25s ease-out forwards;
+        }
+        @keyframes slide-in {
+            from { transform: translateX(-8px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Horizon color transition when critical */
+        .critical-alert-vignette {
+            box-shadow: inset 0 0 60px rgba(255, 42, 85, 0.15);
+            border-color: rgba(255, 42, 85, 0.3) !important;
+            transition: all 0.5s ease;
+        }
+    </style>
+</head>
+<body class="text-on-surface font-body-base text-body-base overflow-hidden h-screen w-screen flex flex-col">
+<div class="scan-line"></div>
+
+<!-- TopNavBar -->
+<header id="main-header" class="w-full h-12 bg-surface/90 backdrop-blur-2xl border-b border-primary/20 flex items-center justify-between px-4 z-40 relative shadow-[0_4px_30px_rgba(0,0,0,0.5)] transition-colors duration-500">
+    <div class="flex items-center gap-6">
+        <div class="flex items-center gap-2 group">
+            <span class="material-symbols-outlined text-primary text-[18px] spin-slow relative z-10" style="font-variation-settings: 'FILL' 1;">psychology</span>
+            <div class="flex flex-col justify-center leading-none">
+                <span class="font-display-lg text-[15px] text-white font-bold tracking-tight">THERMAL_AI<span class="text-primary font-label-caps text-[9px] ml-1">V4.1</span></span>
+                <span class="font-label-caps text-[7px] text-primary/60 tracking-widest mt-0.5">PREDICTIVE COOLING ORCHESTRATION</span>
+            </div>
+        </div>
+        
+        <div class="h-4 w-px bg-primary/20"></div>
+
+        <!-- Top Navigation Tabs -->
+        <nav class="flex items-center gap-1">
+            <button id="tab-dashboard" class="nav-tab px-3 py-1 rounded font-label-caps text-[10px] font-bold tracking-wider transition-all border border-primary/30 bg-primary/10 text-primary shadow-[0_0_10px_rgba(0,229,255,0.15)]">DASHBOARD</button>
+            <button id="tab-graphs" class="nav-tab px-3 py-1 rounded font-label-caps text-[10px] font-bold tracking-wider transition-all border border-transparent bg-transparent text-primary/60 hover:text-primary hover:bg-white/5">GRAPHS</button>
+            <button id="tab-predictions" class="nav-tab px-3 py-1 rounded font-label-caps text-[10px] font-bold tracking-wider transition-all border border-transparent bg-transparent text-primary/60 hover:text-primary hover:bg-white/5">PREDICTIONS</button>
+            <button id="tab-system" class="nav-tab px-3 py-1 rounded font-label-caps text-[10px] font-bold tracking-wider transition-all border border-transparent bg-transparent text-primary/60 hover:text-primary hover:bg-white/5">SYSTEM</button>
+        </nav>
+    </div>
+
+    <div class="flex items-center gap-4">
+        <!-- Telemetry Source Status Toggle -->
+        <div class="flex items-center gap-2 px-2 py-0.5 bg-black/40 border border-primary/20 rounded micro-panel">
+            <span class="font-label-caps text-[7.5px] text-primary/50">SOURCE:</span>
+            <button id="live-mode-toggle" class="px-2 py-0.5 rounded font-data-mono text-[8px] font-bold transition-all border border-primary/40 bg-primary/5 text-primary hover:bg-primary/15">
+                DEMO TIMELINE
+            </button>
+        </div>
+
+        <div class="flex gap-4 font-data-mono text-[9px] text-right">
+            <div class="flex flex-col">
+                <span class="text-primary/50 font-label-caps text-[7.5px]">LATENCY</span>
+                <span id="header-latency" class="text-primary font-bold text-[11px]">4.2ms</span>
+            </div>
+            <div class="flex flex-col border-l border-primary/20 pl-4">
+                <span class="text-secondary-container/50 font-label-caps text-[7.5px]">STABILITY</span>
+                <span class="text-secondary-container font-bold text-[11px] heartbeat-pulse">92%</span>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- Main Workspace -->
+<main class="flex-1 overflow-hidden relative p-3">
+    
+    <!-- 1. DASHBOARD TAB VIEW -->
+    <div id="view-dashboard" class="tab-view grid grid-cols-12 gap-3 h-full overflow-hidden">
+        
+        <!-- LEFT COLUMN: LIVE TELEMETRY -->
+        <div class="col-span-3 flex flex-col gap-2 overflow-y-auto pr-1 data-stream">
+            <div class="font-label-caps text-[9px] text-primary/50 px-1 mb-1 tracking-wider border-b border-primary/10 pb-1 flex justify-between">
+                <span>SYSTEM TELEMETRY</span>
+                <span>10HZ SYNC</span>
+            </div>
+            
+            <!-- CPU Usage Card -->
+            <div class="glass-panel rounded border border-primary/10 p-2 flex items-center justify-between gap-2 overflow-hidden h-[54px] transition-all">
+                <div class="flex flex-col flex-1 leading-none z-10">
+                    <span class="font-label-caps text-[7px] text-primary/60">CPU UTILIZATION</span>
+                    <div class="flex items-baseline gap-1 mt-1">
+                        <span id="val-cpu-util" class="font-data-mono text-[14px] text-white font-bold">--%</span>
+                        <span id="trend-cpu-util" class="text-[8px] font-bold text-secondary-container">→</span>
+                    </div>
+                    <div class="flex items-center gap-1 mt-1 text-[6.5px] font-label-caps">
+                        <span class="w-1 h-1 rounded-full bg-secondary-container pulse-cyan"></span>
+                        <span id="impact-cpu-util" class="text-secondary-container font-bold">NOMINAL IMPACT</span>
+                    </div>
+                </div>
+                <div class="w-20 h-8 flex items-center justify-end relative">
+                    <canvas id="spark-cpu-util" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
+            <!-- GPU Usage Card -->
+            <div class="glass-panel rounded border border-primary/10 p-2 flex items-center justify-between gap-2 overflow-hidden h-[54px] transition-all">
+                <div class="flex flex-col flex-1 leading-none z-10">
+                    <span class="font-label-caps text-[7px] text-primary/60">GPU UTILIZATION</span>
+                    <div class="flex items-baseline gap-1 mt-1">
+                        <span id="val-gpu-util" class="font-data-mono text-[14px] text-white font-bold">--%</span>
+                        <span id="trend-gpu-util" class="text-[8px] font-bold text-secondary-container">→</span>
+                    </div>
+                    <div class="flex items-center gap-1 mt-1 text-[6.5px] font-label-caps">
+                        <span class="w-1 h-1 rounded-full bg-secondary-container pulse-cyan"></span>
+                        <span id="impact-gpu-util" class="text-secondary-container font-bold">NOMINAL IMPACT</span>
+                    </div>
+                </div>
+                <div class="w-20 h-8 flex items-center justify-end relative">
+                    <canvas id="spark-gpu-util" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
+            <!-- RAM Usage Card -->
+            <div class="glass-panel rounded border border-primary/10 p-2 flex items-center justify-between gap-2 overflow-hidden h-[54px] transition-all">
+                <div class="flex flex-col flex-1 leading-none z-10">
+                    <span class="font-label-caps text-[7px] text-primary/60">RAM UTILIZATION</span>
+                    <div class="flex items-baseline gap-1 mt-1">
+                        <span id="val-mem-util" class="font-data-mono text-[14px] text-white font-bold">--%</span>
+                        <span id="trend-mem-util" class="text-[8px] font-bold text-secondary-container">→</span>
+                    </div>
+                    <div class="flex items-center gap-1 mt-1 text-[6.5px] font-label-caps">
+                        <span class="w-1 h-1 rounded-full bg-secondary-container pulse-cyan"></span>
+                        <span id="impact-mem-util" class="text-secondary-container font-bold">NOMINAL IMPACT</span>
+                    </div>
+                </div>
+                <div class="w-20 h-8 flex items-center justify-end relative">
+                    <canvas id="spark-mem-util" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
+            <!-- CPU Temperature Card -->
+            <div class="glass-panel rounded border border-primary/10 p-2 flex items-center justify-between gap-2 overflow-hidden h-[54px] transition-all">
+                <div class="flex flex-col flex-1 leading-none z-10">
+                    <span class="font-label-caps text-[7px] text-primary/60">CPU TEMPERATURE</span>
+                    <div class="flex items-baseline gap-1 mt-1">
+                        <span id="val-cpu-temp" class="font-data-mono text-[14px] text-white font-bold">--°C</span>
+                        <span id="trend-cpu-temp" class="text-[8px] font-bold text-secondary-container">→</span>
+                    </div>
+                    <div class="flex items-center gap-1 mt-1 text-[6.5px] font-label-caps">
+                        <span class="w-1 h-1 rounded-full bg-secondary-container pulse-cyan" id="dot-cpu-temp"></span>
+                        <span id="impact-cpu-temp" class="text-secondary-container font-bold">NOMINAL THERMALS</span>
+                    </div>
+                </div>
+                <div class="w-20 h-8 flex items-center justify-end relative">
+                    <canvas id="spark-cpu-temp" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
+            <!-- GPU Temperature Card -->
+            <div class="glass-panel rounded border border-primary/10 p-2 flex items-center justify-between gap-2 overflow-hidden h-[54px] transition-all">
+                <div class="flex flex-col flex-1 leading-none z-10">
+                    <span class="font-label-caps text-[7px] text-primary/60">GPU TEMPERATURE</span>
+                    <div class="flex items-baseline gap-1 mt-1">
+                        <span id="val-gpu-temp" class="font-data-mono text-[14px] text-white font-bold">--°C</span>
+                        <span id="trend-gpu-temp" class="text-[8px] font-bold text-secondary-container">→</span>
+                    </div>
+                    <div class="flex items-center gap-1 mt-1 text-[6.5px] font-label-caps">
+                        <span class="w-1 h-1 rounded-full bg-secondary-container pulse-cyan" id="dot-gpu-temp"></span>
+                        <span id="impact-gpu-temp" class="text-secondary-container font-bold">NOMINAL THERMALS</span>
+                    </div>
+                </div>
+                <div class="w-20 h-8 flex items-center justify-end relative">
+                    <canvas id="spark-gpu-temp" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
+            <!-- Fan RPM Card -->
+            <div class="glass-panel rounded border border-primary/10 p-2 flex items-center justify-between gap-2 overflow-hidden h-[54px] transition-all">
+                <div class="flex flex-col flex-1 leading-none z-10">
+                    <span class="font-label-caps text-[7px] text-primary/60">FAN ROTATION SPEED</span>
+                    <div class="flex items-baseline gap-1 mt-1">
+                        <span id="val-fan-rpm" class="font-data-mono text-[14px] text-white font-bold">-- RPM</span>
+                        <span id="trend-fan-rpm" class="text-[8px] font-bold text-secondary-container">→</span>
+                    </div>
+                    <div class="flex items-center gap-1 mt-1 text-[6.5px] font-label-caps">
+                        <span class="w-1 h-1 rounded-full bg-secondary-container pulse-cyan"></span>
+                        <span id="impact-fan-rpm" class="text-secondary-container font-bold">STABLE PROFILE</span>
+                    </div>
+                </div>
+                <div class="w-20 h-8 flex items-center justify-end relative">
+                    <canvas id="spark-fan-rpm" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
+            <!-- Power Draw Card -->
+            <div class="glass-panel rounded border border-primary/10 p-2 flex items-center justify-between gap-2 overflow-hidden h-[54px] transition-all">
+                <div class="flex flex-col flex-1 leading-none z-10">
+                    <span class="font-label-caps text-[7px] text-primary/60">SYSTEM POWER DRAW</span>
+                    <div class="flex items-baseline gap-1 mt-1">
+                        <span id="val-power-draw" class="font-data-mono text-[14px] text-white font-bold">-- W</span>
+                        <span id="trend-power-draw" class="text-[8px] font-bold text-secondary-container">→</span>
+                    </div>
+                    <div class="flex items-center gap-1 mt-1 text-[6.5px] font-label-caps">
+                        <span class="w-1 h-1 rounded-full bg-secondary-container pulse-cyan"></span>
+                        <span id="impact-power-draw" class="text-secondary-container font-bold">BALANCED CONSUMP.</span>
+                    </div>
+                </div>
+                <div class="w-20 h-8 flex items-center justify-end relative">
+                    <canvas id="spark-power-draw" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
+            <!-- Battery Status Card -->
+            <div class="glass-panel rounded border border-primary/10 p-2 flex items-center justify-between gap-2 overflow-hidden h-[54px] transition-all">
+                <div class="flex flex-col flex-1 leading-none z-10">
+                    <span class="font-label-caps text-[7px] text-primary/60">BATTERY CAP. & STATE</span>
+                    <div class="flex items-baseline gap-1 mt-1">
+                        <span id="val-battery" class="font-data-mono text-[14px] text-white font-bold">--%</span>
+                        <span id="trend-battery" class="text-[8px] font-bold text-secondary-container">→</span>
+                    </div>
+                    <div class="flex items-center gap-1 mt-1 text-[6.5px] font-label-caps">
+                        <span class="w-1 h-1 rounded-full bg-secondary-container pulse-cyan"></span>
+                        <span id="impact-battery" class="text-secondary-container font-bold">PLUGGED / CHARGING</span>
+                    </div>
+                </div>
+                <div class="w-20 h-8 flex items-center justify-end relative">
+                    <canvas id="spark-battery" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
+            <!-- Disk I/O Card -->
+            <div class="glass-panel rounded border border-primary/10 p-2 flex items-center justify-between gap-2 overflow-hidden h-[54px] transition-all">
+                <div class="flex flex-col flex-1 leading-none z-10">
+                    <span class="font-label-caps text-[7px] text-primary/60">DISK I/O RATE</span>
+                    <div class="flex items-baseline gap-1 mt-1">
+                        <span id="val-disk-io" class="font-data-mono text-[14px] text-white font-bold">-- MB/s</span>
+                        <span id="trend-disk-io" class="text-[8px] font-bold text-secondary-container">→</span>
+                    </div>
+                    <div class="flex items-center gap-1 mt-1 text-[6.5px] font-label-caps">
+                        <span class="w-1 h-1 rounded-full bg-secondary-container pulse-cyan"></span>
+                        <span id="impact-disk-io" class="text-secondary-container font-bold">IDLE DRIFT</span>
+                    </div>
+                </div>
+                <div class="w-20 h-8 flex items-center justify-end relative">
+                    <canvas id="spark-disk-io" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
+            <!-- Network Throughput Card -->
+            <div class="glass-panel rounded border border-primary/10 p-2 flex items-center justify-between gap-2 overflow-hidden h-[54px] transition-all">
+                <div class="flex flex-col flex-1 leading-none z-10">
+                    <span class="font-label-caps text-[7px] text-primary/60">NETWORK THROUGHPUT</span>
+                    <div class="flex items-baseline gap-1 mt-1">
+                        <span id="val-network" class="font-data-mono text-[14px] text-white font-bold">-- MB/s</span>
+                        <span id="trend-network" class="text-[8px] font-bold text-secondary-container">→</span>
+                    </div>
+                    <div class="flex items-center gap-1 mt-1 text-[6.5px] font-label-caps">
+                        <span class="w-1 h-1 rounded-full bg-secondary-container pulse-cyan"></span>
+                        <span id="impact-network" class="text-secondary-container font-bold">NOMINAL SHIFT</span>
+                    </div>
+                </div>
+                <div class="w-20 h-8 flex items-center justify-end relative">
+                    <canvas id="spark-network" class="w-full h-full"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- CENTER COLUMN: AI ENGINE STATUS -->
+        <div class="col-span-6 flex flex-col gap-3 h-full">
+            <div id="ai-engine-panel" class="glass-panel rounded border border-primary/20 p-4 flex flex-col justify-between flex-1 relative overflow-hidden bg-black/40 transition-all duration-300">
+                <div class="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-primary/50 to-transparent"></div>
+                
+                <div class="flex justify-between items-start border-b border-primary/10 pb-3">
+                    <div class="flex flex-col">
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded font-data-mono text-[8px] font-bold bg-primary/20 border border-primary/50 text-primary shadow-[0_0_10px_rgba(0,229,255,0.2)]">PREDICTIVE MODE ACTIVE</span>
+                            <span class="px-2 py-0.5 rounded font-data-mono text-[8px] font-bold bg-secondary-container/10 border border-secondary-container/30 text-secondary-container animate-pulse">SENSOR-FREE AI THERMAL INFERENCE</span>
+                        </div>
+                        <h2 class="font-display-lg text-[17px] text-white font-bold tracking-tight mt-2 flex items-center gap-1.5">
+                            <span class="material-symbols-outlined text-[18px] text-primary animate-pulse">auto_mode</span>
+                            AI THERMAL DEPLOYMENT HUD
+                        </h2>
+                    </div>
+                    
+                    <!-- Circular Risk Gauge -->
+                    <div class="relative w-16 h-16 flex items-center justify-center">
+                        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                            <path class="text-white/5" stroke="currentColor" stroke-width="2.5" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            <path id="ai-risk-ring" class="text-primary transition-all duration-500" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        </svg>
+                        <div class="absolute flex flex-col items-center leading-none">
+                            <span id="ai-risk-percent" class="font-data-mono text-[11px] font-bold text-white">--%</span>
+                            <span class="font-label-caps text-[5px] text-primary/50">RISK</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AI Metrics Grid -->
+                <div class="grid grid-cols-4 gap-3 my-2">
+                    <div class="micro-panel bg-black/40 p-2 border-primary/10 flex flex-col">
+                        <span class="font-label-caps text-[7px] text-primary/50">AI CONFIDENCE</span>
+                        <span id="ai-confidence-val" class="font-data-mono text-[14px] font-bold text-white mt-1">94%</span>
+                    </div>
+                    <div class="micro-panel bg-black/40 p-2 border-primary/10 flex flex-col">
+                        <span class="font-label-caps text-[7px] text-primary/50">SPIKE ETA</span>
+                        <span id="ai-spike-eta-val" class="font-data-mono text-[14px] text-secondary-container font-bold mt-1">18s</span>
+                    </div>
+                    <div class="micro-panel bg-black/40 p-2 border-primary/10 flex flex-col">
+                        <span class="font-label-caps text-[7px] text-primary/50">COOLING POLICY</span>
+                        <span id="ai-policy-val" class="font-data-mono text-[14px] text-tertiary-container font-bold mt-1">AGGRESSIVE</span>
+                    </div>
+                    <div class="micro-panel bg-black/40 p-2 border-primary/10 flex flex-col">
+                        <span class="font-label-caps text-[7px] text-primary/50">THERMAL STATE</span>
+                        <span id="ai-thermal-state-val" class="font-data-mono text-[14px] text-white font-bold mt-1">HIGH</span>
+                    </div>
+                </div>
+
+                <!-- Explainable AI Panel -->
+                <div class="micro-panel bg-black/70 border-primary/10 p-3 rounded flex flex-col gap-2 flex-1 mb-2">
+                    <div class="flex justify-between items-center border-b border-white/5 pb-1">
+                        <span class="font-label-caps text-[8px] text-primary font-bold flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[12px]">help_center</span>
+                            EXPLAINABLE AI REASONING
+                        </span>
+                        <span class="font-data-mono text-[7px] text-primary/40">SHAP FEATURE ATTRIBUTION</span>
+                    </div>
+                    <div class="text-[9px] font-data-mono text-primary/70 flex flex-col gap-1.5" id="shap-reasons">
+                        <div class="flex justify-between items-center">
+                            <span>GPU thermal ramp detected (dH/dt)</span>
+                            <span class="text-error font-bold">+28% Contribution</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span>VRAM cache hit latency propagation</span>
+                            <span class="text-tertiary-container font-bold">+18% Contribution</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span>Composite inference pre-stabilization trigger</span>
+                            <span class="text-white font-bold">Intervention Required</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Split Comparison Cards -->
+                <div class="grid grid-cols-2 gap-3 mt-auto">
+                    <div class="micro-panel border-error/20 bg-error/5 p-3 rounded flex items-center justify-between">
+                        <div class="flex flex-col">
+                            <span class="font-label-caps text-[7px] text-error/80">WITHOUT COOLING</span>
+                            <span class="font-data-mono text-[11px] text-error font-bold mt-1">PREDICTED PEAK</span>
+                        </div>
+                        <span id="ai-peak-uncooled" class="font-data-mono text-[20px] text-error font-bold drop-shadow-[0_0_8px_rgba(255,42,85,0.3)]">94°C</span>
+                    </div>
+                    <div class="micro-panel border-secondary-container/20 bg-secondary-container/5 p-3 rounded flex items-center justify-between">
+                        <div class="flex flex-col">
+                            <span class="font-label-caps text-[7px] text-secondary-container">WITH COOLING</span>
+                            <span class="font-data-mono text-[11px] text-secondary-container font-bold mt-1">PREDICTED PEAK</span>
+                        </div>
+                        <span id="ai-peak-cooled" class="font-data-mono text-[20px] text-secondary-container font-bold drop-shadow-[0_0_8px_rgba(0,253,238,0.3)]">79°C</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- RIGHT COLUMN: ALERTS & HEALTH -->
+        <div class="col-span-3 flex flex-col gap-2 h-full">
+            
+            <!-- Workload Semantics & Intent -->
+            <div class="glass-panel rounded border border-primary/20 p-2.5 flex flex-col gap-2 shadow-[0_0_15px_rgba(0,229,255,0.05)]">
+                <span class="font-label-caps text-[8px] text-primary font-bold border-b border-primary/10 pb-1 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[10px]">psychology</span> WORKLOAD SEMANTICS & INTENT
+                </span>
+                
+                <div class="grid grid-cols-2 gap-y-2 gap-x-2 font-data-mono text-[9px] mt-1">
+                    <div class="flex flex-col">
+                        <span class="text-primary/50 font-label-caps text-[6px]">WORKLOAD FINGERPRINT</span>
+                        <span id="semantic-fingerprint" class="text-white font-bold mt-0.5 truncate">IDLE_BROWSER</span>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-primary/50 font-label-caps text-[6px]">THERMAL PHASE</span>
+                        <span id="semantic-phase" class="text-secondary-container font-bold mt-0.5 truncate">EQUILIBRIUM</span>
+                    </div>
+                    
+                    <div class="flex flex-col">
+                        <span class="text-primary/50 font-label-caps text-[6px]">THERMAL HEADROOM</span>
+                        <span id="semantic-headroom" class="text-white font-bold mt-0.5"><span id="headroom-val">40.0</span>°C remaining</span>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-primary/50 font-label-caps text-[6px]">ACOUSTIC MODE</span>
+                        <span id="semantic-acoustic" class="text-tertiary-container font-bold mt-0.5 truncate">NOMINAL</span>
+                    </div>
+                    
+                    <div class="flex flex-col">
+                        <span class="text-primary/50 font-label-caps text-[6px]">ESCALATION STATUS</span>
+                        <span id="semantic-escalation" class="text-white font-bold mt-0.5 truncate">--</span>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-primary/50 font-label-caps text-[6px]">IDLE CLAMP</span>
+                        <span id="semantic-idle-clamp" class="text-white font-bold mt-0.5 truncate">INACTIVE</span>
+                    </div>
+                </div>
+                
+                <div class="flex flex-col border-t border-primary/10 pt-1.5 mt-0.5">
+                    <span class="text-primary/50 font-label-caps text-[6px]">PREDICTIVE COOLING WINDOW</span>
+                    <span id="semantic-predictive-window" class="text-primary/80 font-data-mono text-[8px] font-bold mt-0.5 truncate">NONE EXPECTED</span>
+                </div>
+                
+                <!-- Orchestration Intelligence Score Bar -->
+                <div class="flex flex-col mt-1">
+                    <div class="flex justify-between items-center text-[6px] font-label-caps text-primary/60 mb-1">
+                        <span>ORCHESTRATION INTELLIGENCE SCORE</span>
+                        <span id="ti-score-lbl" class="text-white font-bold text-[8px] font-data-mono">100.0</span>
+                    </div>
+                    <div class="w-full h-1 bg-black rounded-full overflow-hidden border border-white/5">
+                        <div id="ti-score-bar" class="h-full bg-gradient-to-r from-primary to-secondary-container transition-all duration-500" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hardware Sync State -->
+            <div id="hardware-sync-panel" class="glass-panel rounded border border-primary/10 p-2.5 flex flex-col gap-1.5 transition-all">
+                <div class="flex justify-between items-center border-b border-primary/10 pb-1.5 mb-0.5">
+                    <span class="font-label-caps text-[8px] text-primary font-bold flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[10px]">sync</span> HARDWARE ORCHESTRATION
+                    </span>
+                    <span id="hw-sync-status" class="font-data-mono text-[7px] text-secondary-container font-bold px-1.5 py-0.5 bg-secondary-container/10 border border-secondary-container/20 rounded">SYNCED</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 font-data-mono text-[9px]">
+                    <div class="flex flex-col">
+                        <span class="text-primary/50 font-label-caps text-[6px]">REQUESTED POLICY</span>
+                        <span id="hw-req-mode" class="text-white font-bold mt-0.5">--</span>
+                    </div>
+                    <div class="flex flex-col border-l border-primary/10 pl-2">
+                        <span class="text-primary/50 font-label-caps text-[6px]">ACTUAL HARDWARE</span>
+                        <span id="hw-act-mode" class="text-secondary-container font-bold mt-0.5">--</span>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center font-data-mono text-[7px] mt-1 pt-1.5 border-t border-white/5">
+                    <span id="hw-sync-msg" class="text-primary/60">MONITORING STATE</span>
+                    <div class="flex gap-2">
+                        <span class="text-primary/40" title="Cooldown Timer">COOLDOWN: <span id="hw-cooldown-timer" class="text-white">0.0s</span></span>
+                        <span class="text-primary/40" title="Hold Lock Timer">LOCK: <span id="hw-lock-timer" class="text-white">0.0s</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cooling Efficiency -->
+            <div class="glass-panel rounded border border-primary/10 p-3 flex flex-col gap-2">
+                <span class="font-label-caps text-[8px] text-primary/70 font-bold border-b border-primary/10 pb-1">COOLING EFFICIENCY METRICS</span>
+                <div class="grid grid-cols-3 gap-2 text-center">
+                    <div class="flex flex-col">
+                        <span class="font-label-caps text-[6px] text-primary/50">ENERGY SAVED</span>
+                        <span class="font-data-mono text-[11px] text-secondary-container font-bold mt-0.5">14.2%</span>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="font-label-caps text-[6px] text-primary/50">THERMAL RED.</span>
+                        <span class="font-data-mono text-[11px] text-white font-bold mt-0.5">86.5%</span>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="font-label-caps text-[6px] text-primary/50">FAN OPTIM.</span>
+                        <span class="font-data-mono text-[11px] text-tertiary-container font-bold mt-0.5">91/100</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timeline -->
+            <div class="glass-panel rounded border border-primary/10 p-3 flex flex-col">
+                <span class="font-label-caps text-[8px] text-primary/70 font-bold border-b border-primary/10 pb-1">ACTIVE ORCHESTRATION PIPELINE</span>
+                <div class="flex items-center justify-between mt-2.5 font-label-caps text-[6px] text-primary/40 relative">
+                    <div class="absolute top-[5px] left-2 right-2 h-0.5 bg-primary/20 z-0"></div>
+                    <div class="absolute top-[5px] left-2 w-0 h-0.5 bg-primary z-0 transition-all duration-500" id="dash-pipeline-bar" style="width: 33%"></div>
+                    
+                    <div class="flex flex-col items-center gap-1 z-10 relative">
+                        <div id="dash-step-0" class="w-3 h-3 rounded-full border border-primary bg-primary flex items-center justify-center shadow-[0_0_5px_rgba(0,229,255,0.7)]"></div>
+                        <span class="text-primary font-bold">Prediction</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1 z-10 relative">
+                        <div id="dash-step-1" class="w-3 h-3 rounded-full border border-primary/30 bg-surface flex items-center justify-center"></div>
+                        <span id="dash-step-1-lbl">Trigger</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1 z-10 relative">
+                        <div id="dash-step-2" class="w-3 h-3 rounded-full border border-primary/30 bg-surface flex items-center justify-center"></div>
+                        <span id="dash-step-2-lbl">Fan Ramp</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1 z-10 relative">
+                        <div id="dash-step-3" class="w-3 h-3 rounded-full border border-primary/30 bg-surface flex items-center justify-center"></div>
+                        <span id="dash-step-3-lbl">Stabilized</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerts list -->
+            <div class="glass-panel rounded border border-primary/10 p-3 flex flex-col flex-1 overflow-hidden">
+                <div class="flex justify-between items-center border-b border-primary/10 pb-1">
+                    <span class="font-label-caps text-[8.5px] text-primary font-bold">LIVE TELEMETRY ALERTS</span>
+                    <span class="flex items-center gap-1 font-data-mono text-[7px] text-primary/50"><span class="w-1.5 h-1.5 bg-primary rounded-full animate-ping"></span> MONITORING</span>
+                </div>
+                <div id="dashboard-alerts" class="flex-1 overflow-y-auto space-y-1.5 pt-2 pr-1 font-data-mono text-[8px] min-h-0 data-stream pb-4">
+                    <!-- Loaded dynamically via event stream -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 2. GRAPHS TAB VIEW -->
+    <div id="view-graphs" class="tab-view hidden grid grid-cols-2 gap-3 h-full overflow-y-auto pb-4 data-stream">
+        <!-- CPU Usage Chart -->
+        <div class="glass-panel border border-primary/10 p-2 flex flex-col h-[135px] relative overflow-hidden">
+            <canvas id="chart-cpu-usage"></canvas>
+        </div>
+        <!-- GPU Usage Chart -->
+        <div class="glass-panel border border-primary/10 p-2 flex flex-col h-[135px] relative overflow-hidden">
+            <canvas id="chart-gpu-usage"></canvas>
+        </div>
+        <!-- RAM Usage Chart -->
+        <div class="glass-panel border border-primary/10 p-2 flex flex-col h-[135px] relative overflow-hidden">
+            <canvas id="chart-ram-usage"></canvas>
+        </div>
+        <!-- Thermal Risk Chart -->
+        <div class="glass-panel border border-primary/10 p-2 flex flex-col h-[135px] relative overflow-hidden">
+            <!-- Thermal Risk has special projections -->
+            <canvas id="chart-thermal-risk"></canvas>
+        </div>
+        <!-- Fan RPM Chart -->
+        <div class="glass-panel border border-primary/10 p-2 flex flex-col h-[135px] relative overflow-hidden">
+            <canvas id="chart-fan-rpm"></canvas>
+        </div>
+        <!-- Power Draw Chart -->
+        <div class="glass-panel border border-primary/10 p-2 flex flex-col h-[135px] relative overflow-hidden">
+            <canvas id="chart-power-draw"></canvas>
+        </div>
+        <!-- Disk I/O Chart -->
+        <div class="glass-panel border border-primary/10 p-2 flex flex-col h-[135px] relative overflow-hidden">
+            <canvas id="chart-disk-io"></canvas>
+        </div>
+        <!-- Network Throughput Chart -->
+        <div class="glass-panel border border-primary/10 p-2 flex flex-col h-[135px] relative overflow-hidden">
+            <canvas id="chart-network-throughput"></canvas>
+        </div>
+    </div>
+
+    <!-- 3. PREDICTIONS TAB VIEW -->
+    <div id="view-predictions" class="tab-view hidden flex flex-col gap-3 h-full overflow-y-auto pb-4 data-stream">
+
+        <!-- TOP ROW: Thermal State Machine + Model Health -->
+        <div class="grid grid-cols-12 gap-3">
+
+            <!-- Thermal State Machine (col 8) -->
+            <div class="col-span-8 glass-panel border border-primary/10 p-3">
+                <div class="flex justify-between items-center border-b border-primary/10 pb-2 mb-2">
+                    <span class="font-label-caps text-[9px] text-primary font-bold">THERMAL STATE MACHINE</span>
+                    <span id="pred-state-timestamp" class="font-data-mono text-[7px] text-primary/40">LAST TRANSITION: --</span>
+                </div>
+                <div class="grid grid-cols-5 gap-2 items-stretch">
+                    <!-- State nodes -->
+                    <div id="psm-quiet"   class="psm-node flex flex-col items-center gap-1 p-2 rounded border border-primary/10 transition-all duration-500">
+                        <span class="material-symbols-outlined text-[14px]">volume_off</span>
+                        <span class="font-label-caps text-[7px] font-bold">QUIET</span>
+                    </div>
+                    <div id="psm-balanced" class="psm-node flex flex-col items-center gap-1 p-2 rounded border border-primary/10 transition-all duration-500">
+                        <span class="material-symbols-outlined text-[14px]">balance</span>
+                        <span class="font-label-caps text-[7px] font-bold">BALANCED</span>
+                    </div>
+                    <div id="psm-performance" class="psm-node flex flex-col items-center gap-1 p-2 rounded border border-primary/10 transition-all duration-500">
+                        <span class="material-symbols-outlined text-[14px]">speed</span>
+                        <span class="font-label-caps text-[7px] font-bold">PERFORMANCE</span>
+                    </div>
+                    <div id="psm-failsafe" class="psm-node flex flex-col items-center gap-1 p-2 rounded border border-error/20 transition-all duration-500">
+                        <span class="material-symbols-outlined text-[14px]">emergency</span>
+                        <span class="font-label-caps text-[7px] font-bold">FAILSAFE</span>
+                    </div>
+                    <div id="psm-recovery" class="psm-node flex flex-col items-center gap-1 p-2 rounded border border-primary/10 transition-all duration-500">
+                        <span class="material-symbols-outlined text-[14px]">health_and_safety</span>
+                        <span class="font-label-caps text-[7px] font-bold">RECOVERY</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2 mt-3 font-data-mono text-[8px]">
+                    <div class="micro-panel p-2">
+                        <div class="font-label-caps text-[6.5px] text-primary/50 mb-0.5">CURRENT STATE</div>
+                        <div id="pred-cur-state" class="text-primary font-bold text-[11px]">--</div>
+                    </div>
+                    <div class="micro-panel p-2">
+                        <div class="font-label-caps text-[6.5px] text-primary/50 mb-0.5">CAUSE</div>
+                        <div id="pred-state-cause" class="text-white/80 text-[8px] leading-snug">--</div>
+                    </div>
+                    <div class="micro-panel p-2">
+                        <div class="font-label-caps text-[6.5px] text-primary/50 mb-0.5">STABILIZATION ETA</div>
+                        <div id="pred-stab-eta" class="text-secondary-container font-bold text-[11px]">--</div>
+                        <div class="w-full h-1 bg-black/60 rounded overflow-hidden mt-1">
+                            <div id="pred-stab-bar" class="h-full bg-primary/60 transition-all duration-500 rounded" style="width:0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model Health (col 4) -->
+            <div class="col-span-4 glass-panel border border-primary/10 p-3 flex flex-col gap-2">
+                <div class="flex justify-between items-center border-b border-primary/10 pb-2">
+                    <span class="font-label-caps text-[9px] text-primary font-bold">MODEL HEALTH</span>
+                    <span id="pred-model-status" class="font-data-mono text-[7.5px] font-bold text-secondary-container">NOMINAL</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 font-data-mono text-[8px] flex-1">
+                    <div class="micro-panel p-1.5 flex flex-col">
+                        <span class="font-label-caps text-[6px] text-primary/40">INFERENCE LATENCY</span>
+                        <span id="pred-inf-latency" class="text-primary font-bold text-[11px] mt-0.5">--</span>
+                    </div>
+                    <div class="micro-panel p-1.5 flex flex-col">
+                        <span class="font-label-caps text-[6px] text-primary/40">PREDICTION STABILITY</span>
+                        <span id="pred-stability" class="text-secondary-container font-bold text-[11px] mt-0.5">--</span>
+                    </div>
+                    <div class="micro-panel p-1.5 flex flex-col">
+                        <span class="font-label-caps text-[6px] text-primary/40">CONFIDENCE DRIFT</span>
+                        <span id="pred-conf-drift" class="text-white font-bold text-[11px] mt-0.5">--</span>
+                    </div>
+                    <div class="micro-panel p-1.5 flex flex-col">
+                        <span class="font-label-caps text-[6px] text-primary/40">TELEMETRY INTEGRITY</span>
+                        <span id="pred-telem-integrity" class="text-secondary-container font-bold text-[11px] mt-0.5">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MIDDLE ROW: Thermal Projection Canvas + Bottleneck + Actions -->
+        <div class="grid grid-cols-12 gap-3 flex-1">
+
+            <!-- Live Thermal Projection (col 8) -->
+            <div class="col-span-8 flex flex-col gap-3">
+
+                <!-- Projection Canvas -->
+                <div class="glass-panel border border-primary/10 p-3 flex flex-col h-[230px]">
+                    <div class="flex justify-between items-center border-b border-primary/10 pb-2 mb-2">
+                        <span class="font-label-caps text-[9px] text-primary font-bold">REAL-TIME THERMAL PROJECTION</span>
+                        <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-1.5 font-data-mono text-[7.5px]">
+                                <span class="w-3 h-0.5 bg-primary inline-block"></span><span class="text-primary/60">CURRENT</span>
+                                <span class="w-3 h-0.5 border-t-2 border-dashed border-tertiary-container inline-block ml-2"></span><span class="text-tertiary-container/60">PROJECTED</span>
+                                <span class="w-3 h-0.5 border-t border-dashed border-error/60 inline-block ml-2"></span><span class="text-error/60">THRESHOLD</span>
+                            </div>
+                            <select id="horizon-select" class="bg-black border border-primary/30 text-primary font-data-mono text-[8px] px-1 py-0.5 rounded outline-none cursor-pointer">
+                                <option value="5">5s Horizon</option>
+                                <option value="15">15s Horizon</option>
+                                <option value="30" selected>30s Horizon</option>
+                                <option value="60">60s Horizon</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative overflow-hidden">
+                        <canvas id="horizon-projection-canvas" class="absolute inset-0 w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <!-- Confidence Distribution (live) -->
+                <div class="glass-panel border border-primary/10 p-3 flex flex-col h-[140px]">
+                    <div class="flex justify-between items-center border-b border-primary/10 pb-2 mb-2">
+                        <span class="font-label-caps text-[9px] text-primary font-bold">LIVE PREDICTION CONFIDENCE DISTRIBUTION</span>
+                        <div class="flex items-center gap-2 font-data-mono text-[7.5px]">
+                            <span class="text-primary/40">VARIANCE:</span>
+                            <span id="pred-variance" class="text-white font-bold">--</span>
+                            <span class="text-primary/40 ml-2">CONFIDENCE:</span>
+                            <span id="pred-conf-pct" class="text-secondary-container font-bold">--</span>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative overflow-hidden">
+                        <canvas id="confidence-distribution-canvas" class="absolute inset-0 w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <!-- AI Decision Reasoning -->
+                <div class="glass-panel border border-primary/10 p-3 flex flex-col">
+                    <div class="flex justify-between items-center border-b border-primary/10 pb-2 mb-2">
+                        <span class="font-label-caps text-[9px] text-primary font-bold">AI DECISION REASONING</span>
+                        <span class="flex items-center gap-1 font-data-mono text-[7px] text-secondary-container"><span class="w-1.5 h-1.5 bg-secondary-container rounded-full animate-ping"></span>LIVE XAI</span>
+                    </div>
+                    <div id="pred-ai-reasoning" class="flex flex-col gap-1.5 font-data-mono text-[8px] text-white/80">
+                        <!-- Updated live -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Bottlenecks + Actions + Risk Timeline -->
+            <div class="col-span-4 flex flex-col gap-3">
+
+                <!-- Bottleneck Engine -->
+                <div class="glass-panel border border-primary/10 p-3 flex flex-col">
+                    <div class="flex justify-between items-center border-b border-primary/10 pb-1.5 mb-2">
+                        <span class="font-label-caps text-[9px] text-primary font-bold">BOTTLENECK DETECTION</span>
+                        <span id="pred-primary-bottleneck-label" class="font-data-mono text-[6.5px] text-error font-bold">--</span>
+                    </div>
+                    <div id="pred-bottleneck-list" class="flex flex-col gap-2 font-data-mono text-[8px]">
+                        <!-- dynamic -->
+                    </div>
+                </div>
+
+                <!-- Predicted Cooling Actions -->
+                <div class="glass-panel border border-primary/10 p-3 flex flex-col flex-1 overflow-hidden">
+                    <div class="flex justify-between items-center border-b border-primary/10 pb-1.5 mb-2">
+                        <span class="font-label-caps text-[9px] text-primary font-bold">AI ORCHESTRATION PIPELINE</span>
+                        <span id="pred-actions-count" class="font-data-mono text-[7px] text-primary/40">0 ACTIONS</span>
+                    </div>
+                    <div id="predicted-actions-list" class="flex-1 overflow-y-auto space-y-2 data-stream pr-1 font-data-mono text-[8px]">
+                        <!-- dynamic -->
+                    </div>
+                </div>
+
+                <!-- Future Risk Timeline -->
+                <div class="glass-panel border border-primary/10 p-3 flex flex-col">
+                    <span class="font-label-caps text-[9px] text-primary font-bold border-b border-primary/10 pb-1.5 mb-2">FUTURE RISK TIMELINE</span>
+                    <div class="relative h-[44px] overflow-hidden">
+                        <canvas id="pred-risk-timeline-canvas" class="absolute inset-0 w-full h-full"></canvas>
+                    </div>
+                    <div class="flex justify-between font-label-caps text-[6px] text-primary/30 mt-1">
+                        <span>NOW</span><span>+10s</span><span>+20s</span><span>+30s</span>
+                    </div>
+                </div>
+
+                <!-- Predicted Peak Comparison -->
+                <div class="glass-panel border border-primary/10 p-3 flex flex-col">
+                    <span class="font-label-caps text-[9px] text-primary font-bold border-b border-primary/10 pb-1.5 mb-2">PREDICTED PEAK COMPARISON</span>
+                    <div class="grid grid-cols-2 gap-2 font-data-mono text-center">
+                        <div class="micro-panel p-2 border-l-2 border-error/50">
+                            <div class="font-label-caps text-[6px] text-error/70">WITHOUT COOLING</div>
+                            <div id="pred-peak-uncooled" class="text-error font-bold text-[16px] mt-0.5">--</div>
+                        </div>
+                        <div class="micro-panel p-2 border-l-2 border-secondary-container/50">
+                            <div class="font-label-caps text-[6px] text-secondary-container/70">WITH COOLING</div>
+                            <div id="pred-peak-cooled" class="text-secondary-container font-bold text-[16px] mt-0.5">--</div>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <div class="flex justify-between font-label-caps text-[6.5px] text-primary/50 mb-0.5">
+                            <span>THERMAL REDUCTION</span>
+                            <span id="pred-thermal-reduction" class="text-secondary-container font-bold">--</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-black/60 rounded overflow-hidden">
+                            <div id="pred-reduction-bar" class="h-full bg-gradient-to-r from-error to-secondary-container rounded transition-all duration-700" style="width:0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. SYSTEM TAB VIEW -->
+    <div id="view-system" class="tab-view hidden grid grid-cols-12 gap-3 h-full overflow-y-auto pb-4 data-stream">
+        
+        <!-- Left Column: Properties & Policy Selection -->
+        <div class="col-span-4 flex flex-col gap-3">
+            <div class="glass-panel border border-primary/10 p-3 flex flex-col">
+                <span class="font-label-caps text-[9px] text-primary font-bold border-b border-primary/10 pb-1.5 mb-2">HARDWARE PROPERTIES</span>
+                <div class="flex flex-col gap-1.5 font-data-mono text-[8.5px] text-primary/80">
+                    <div class="flex justify-between"><span>Host Laptop:</span><span class="text-white font-bold">Lenovo Legion Deployment</span></div>
+                    <div class="flex justify-between"><span>CPU Package:</span><span class="text-white">AMD Ryzen 9 / Core i9</span></div>
+                    <div class="flex justify-between"><span>Discrete GPU:</span><span class="text-white">NVIDIA RTX 40-Series</span></div>
+                    <div class="flex justify-between"><span>Toolkit Bridge:</span><span class="text-secondary-container font-bold">Connected (LLT CLI)</span></div>
+                    <div class="flex justify-between"><span>API Address:</span><span class="text-white">http://localhost:8080</span></div>
+                </div>
+            </div>
+
+            <!-- Policy Select -->
+            <div class="glass-panel border border-primary/10 p-3 flex flex-col">
+                <span class="font-label-caps text-[9px] text-primary font-bold border-b border-primary/10 pb-1.5 mb-2">COOLING OVERRIDES & THRESHOLDS</span>
+                <div class="flex flex-col gap-2 font-data-mono text-[8.5px]">
+                    <div class="flex justify-between items-center">
+                        <span>Active Policy Override:</span>
+                        <select id="policy-override-select" class="bg-black border border-primary/30 text-primary px-1.5 py-0.5 rounded outline-none cursor-pointer">
+                            <option value="PREDICTIVE">Predictive AI Control</option>
+                            <option value="QUIET">Force Quiet Mode</option>
+                            <option value="BALANCED">Force Balanced Mode</option>
+                            <option value="PERFORMANCE">Force Performance Mode</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-between items-center mt-1">
+                        <span>Model Latency Target:</span>
+                        <span class="text-secondary-container font-bold">0.45ms</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span>Telemetry Sample Rate:</span>
+                        <span class="text-white">100ms (10Hz)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center/Right Column: Pipeline visual & logs -->
+        <div class="col-span-8 flex flex-col gap-3 h-full">
+            <div class="glass-panel border border-primary/10 p-3 flex flex-col">
+                <span class="font-label-caps text-[9px] text-primary font-bold border-b border-primary/10 pb-2 mb-3">INFERENCE PIPELINE DATA FLOW</span>
+                
+                <div class="grid grid-cols-5 gap-2 items-center text-center font-label-caps text-[7.5px] relative">
+                    <div class="micro-panel p-2 flex flex-col items-center">
+                        <span class="material-symbols-outlined text-[16px] text-primary mb-1">sensors</span>
+                        <span class="text-white font-bold">Telemetry</span>
+                    </div>
+                    <div class="flex justify-center text-primary/40"><span class="material-symbols-outlined text-[14px]">chevron_right</span></div>
+                    <div class="micro-panel p-2 flex flex-col items-center">
+                        <span class="material-symbols-outlined text-[16px] text-primary mb-1">analytics</span>
+                        <span class="text-white font-bold">Processor</span>
+                    </div>
+                    <div class="flex justify-center text-primary/40"><span class="material-symbols-outlined text-[14px]">chevron_right</span></div>
+                    <div class="micro-panel p-2 flex flex-col items-center border-secondary-container/30">
+                        <span class="material-symbols-outlined text-[16px] text-secondary-container mb-1 animate-pulse">schema</span>
+                        <span class="text-secondary-container font-bold">XGBoost AI</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System logs -->
+            <div class="glass-panel border border-primary/10 p-3 flex flex-col flex-1 min-h-[220px] overflow-hidden">
+                <span class="font-label-caps text-[9px] text-primary font-bold border-b border-primary/10 pb-1.5 mb-2 flex justify-between">
+                    <span>SYSTEM EXECUTION LOGS</span>
+                    <span class="text-primary/40 font-data-mono text-[7px]" id="logs-sync-status">SYNCED</span>
+                </span>
+                <div id="system-logs" class="flex-1 bg-black/60 border border-white/5 rounded p-2 overflow-y-auto font-data-mono text-[8px] text-primary/80 data-stream pb-4">
+                    <!-- dynamic system logs -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</main>
+
+<script>
+    // System Theme Colors
+    const colors = {
+        primary: '#00e5ff',
+        secondaryContainer: '#00fdee',
+        tertiaryContainer: '#ebb2ff',
+        error: '#ff2a55',
+        gray: '#859399'
+    };
+
+    // Canvas Monospace Font scale configuration
+    const monoFont = (size, isBold = false) => {
+        return `${isBold ? 'bold ' : ''}${size}px "JetBrains Mono", Consolas, Monaco, monospace`;
+    };
+
+    // UI View controller state
+    const tabs = [
+        { btn: document.getElementById('tab-dashboard'), view: document.getElementById('view-dashboard') },
+        { btn: document.getElementById('tab-graphs'), view: document.getElementById('view-graphs') },
+        { btn: document.getElementById('tab-predictions'), view: document.getElementById('view-predictions') },
+        { btn: document.getElementById('tab-system'), view: document.getElementById('view-system') }
+    ];
+
+    let activeTabId = 'tab-dashboard';
+
+    function switchTab(targetId) {
+        activeTabId = targetId;
+        tabs.forEach(t => {
+            if (t.btn.id === targetId) {
+                t.btn.className = "nav-tab px-3 py-1 rounded font-label-caps text-[10px] font-bold tracking-wider transition-all border border-primary/30 bg-primary/10 text-primary shadow-[0_0_10px_rgba(0,229,255,0.15)]";
+                t.view.classList.remove('hidden');
+            } else {
+                t.btn.className = "nav-tab px-3 py-1 rounded font-label-caps text-[10px] font-bold tracking-wider transition-all border border-transparent bg-transparent text-primary/60 hover:text-primary hover:bg-white/5";
+                t.view.classList.add('hidden');
+            }
+        });
+        
+        // Force redraw on graphs tab switch
+        if (targetId === 'tab-graphs') {
+            setTimeout(drawAllDashboardCharts, 50);
+        } else if (targetId === 'tab-predictions') {
+            setTimeout(() => {
+                renderPredictionsCanvases();
+            }, 50);
+        }
+    }
+
+    tabs.forEach(t => {
+        t.btn.addEventListener('click', () => switchTab(t.btn.id));
+    });
+
+    // Toggle live mode
+    const toggleEl = document.getElementById('live-mode-toggle');
+    if (toggleEl) {
+        toggleEl.addEventListener('click', async () => {
+            try {
+                const res = await fetch('http://localhost:8080/toggle-mode', { method: 'POST' });
+                if (res.ok) {
+                    const data = await res.json();
+                    updateToggleUI(data.live_mode);
+                }
+            } catch (e) {
+                console.error("Failed to toggle mode:", e);
+            }
+        });
+    }
+
+    function updateToggleUI(isLive) {
+        if (!toggleEl) return;
+        if (isLive) {
+            toggleEl.innerText = "LIVE TELEMETRY";
+            toggleEl.className = "px-2 py-0.5 rounded font-data-mono text-[8px] font-bold transition-all border border-secondary-container bg-secondary-container/20 text-secondary-container shadow-[0_0_10px_rgba(0,253,238,0.4)] hover:bg-secondary-container/30";
+        } else {
+            toggleEl.innerText = "DEMO TIMELINE";
+            toggleEl.className = "px-2 py-0.5 rounded font-data-mono text-[8px] font-bold transition-all border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20";
+        }
+    }
+
+    // Telemetry History Arrays (last 60 ticks)
+    const historyLength = 60;
+    const history = {
+        cpu_util: Array(historyLength).fill(0),
+        gpu_util: Array(historyLength).fill(0),
+        mem_util: Array(historyLength).fill(0),
+        cpu_temp: Array(historyLength).fill(0),
+        gpu_temp: Array(historyLength).fill(0),
+        fan_rpm: Array(historyLength).fill(0),
+        power_draw: Array(historyLength).fill(0),
+        battery: Array(historyLength).fill(0),
+        disk_io: Array(historyLength).fill(0),
+        network: Array(historyLength).fill(0),
+        risk_score: Array(historyLength).fill(0)
+    };
+
+    // State populated via backend stream
+    let latestData = {
+        risk_score: 0.1,
+        target_rpm: 1000,
+        actual_rpm: 1000,
+        telemetry: { cpu_util: 0, gpu_util: 0, mem_util: 45, cpu_temp: 40, gpu_temp: 38 },
+        health: { status: 'HEALTHY' },
+        current_lead_time_sec: 0,
+        events: []
+    };
+
+    const renderedEvents = new Set();
+    let graphTimeOffset = 0;
+
+    // Stream Telemetry at 10Hz
+    async function streamTelemetry() {
+        try {
+            const res = await fetch('http://localhost:8080/telemetry');
+            if (res.ok) {
+                const data = await res.json();
+                if (Object.keys(data).length > 0) {
+                    latestData = { ...latestData, ...data };
+                    if (data.live_mode !== undefined) {
+                        updateToggleUI(data.live_mode);
+                    }
+                    
+                    // Derive telemetry items not returned directly by backend
+                    const cpu = data.telemetry?.cpu_util || data.telemetry?.cpu || 0;
+                    const gpu = data.telemetry?.gpu_util || data.telemetry?.gpu || 0;
+                    const mem = data.telemetry?.mem_util || 45.0 + Math.sin(Date.now() / 20000) * 2;
+                    const ctemp = data.telemetry?.cpu_temp || 40;
+                    const gtemp = data.telemetry?.gpu_temp || 38;
+                    const rpm = data.actual_rpm || 1000;
+                    
+                    // Synthetic derived metrics for full deployment dashboard
+                    const pwr = 15.0 + (cpu * 0.35) + (gpu * 0.55) + Math.sin(Date.now() / 5000) * 0.4;
+                    const bat = 92.0; // stable power draw
+                    const dio = Math.max(0.1, 0.1 + (cpu * 0.08) + Math.cos(Date.now() / 3000) * 0.1);
+                    const net = Math.max(0.2, 0.4 + (cpu * 0.02) + Math.sin(Date.now() / 4000) * 0.2);
+                    
+                    const risk = data.risk_score || 0.0;
+
+                    // Push to history queues
+                    pushHistory('cpu_util', cpu);
+                    pushHistory('gpu_util', gpu);
+                    pushHistory('mem_util', mem);
+                    pushHistory('cpu_temp', ctemp);
+                    pushHistory('gpu_temp', gtemp);
+                    pushHistory('fan_rpm', rpm);
+                    pushHistory('power_draw', pwr);
+                    pushHistory('battery', bat);
+                    pushHistory('disk_io', dio);
+                    pushHistory('network', net);
+                    pushHistory('risk_score', risk);
+
+                    // Update UI Bindings
+                    updateDashboardUI(cpu, gpu, mem, ctemp, gtemp, rpm, pwr, bat, dio, net, risk);
+                }
+            }
+        } catch (e) {
+            console.error("Telemetry fetch error:", e);
+        }
+        setTimeout(streamTelemetry, 100);
+    }
+
+    function pushHistory(key, val) {
+        history[key].push(val);
+        if (history[key].length > historyLength) {
+            history[key].shift();
+        }
+    }
+
+    // Direct dashboard DOM bindings
+    function updateDashboardUI(cpu, gpu, mem, ctemp, gtemp, rpm, pwr, bat, dio, net, risk) {
+        // CPU Usage
+        setVal('val-cpu-util', cpu.toFixed(1) + '%');
+        updateTrend('trend-cpu-util', history.cpu_util);
+        document.getElementById('impact-cpu-util').innerText = cpu > 80 ? "HIGH IMPACT" : cpu > 40 ? "MODERATE IMPACT" : "NOMINAL IMPACT";
+        
+        // GPU Usage
+        setVal('val-gpu-util', gpu.toFixed(1) + '%');
+        updateTrend('trend-gpu-util', history.gpu_util);
+        document.getElementById('impact-gpu-util').innerText = gpu > 80 ? "HIGH IMPACT" : gpu > 40 ? "MODERATE IMPACT" : "NOMINAL IMPACT";
+
+        // RAM Usage
+        setVal('val-mem-util', mem.toFixed(1) + '%');
+        updateTrend('trend-mem-util', history.mem_util);
+        
+        // CPU Temperature
+        setVal('val-cpu-temp', ctemp.toFixed(1) + '°C');
+        updateTrend('trend-cpu-temp', history.cpu_temp);
+        const cpuTempDot = document.getElementById('dot-cpu-temp');
+        if (cpuTempDot) cpuTempDot.className = "w-1 h-1 rounded-full " + (ctemp > 80 ? "bg-error pulse-error" : "bg-secondary-container pulse-cyan");
+        document.getElementById('impact-cpu-temp').innerText = ctemp > 80 ? "CRITICAL THERMALS" : ctemp > 65 ? "ELEVATED THERMALS" : "NOMINAL THERMALS";
+
+        // GPU Temperature
+        setVal('val-gpu-temp', gtemp.toFixed(1) + '°C');
+        updateTrend('trend-gpu-temp', history.gpu_temp);
+        const gpuTempDot = document.getElementById('dot-gpu-temp');
+        if (gpuTempDot) gpuTempDot.className = "w-1 h-1 rounded-full " + (gtemp > 75 ? "bg-error pulse-error" : "bg-secondary-container pulse-cyan");
+        document.getElementById('impact-gpu-temp').innerText = gtemp > 75 ? "CRITICAL THERMALS" : gtemp > 60 ? "ELEVATED THERMALS" : "NOMINAL THERMALS";
+
+        // Fan RPM
+        setVal('val-fan-rpm', Math.round(rpm).toLocaleString() + ' RPM');
+        updateTrend('trend-fan-rpm', history.fan_rpm);
+        document.getElementById('impact-fan-rpm').innerText = rpm > 3000 ? "ACTIVE PRE-COOLING" : rpm > 2000 ? "BALANCED RAMP" : "STABLE PROFILE";
+
+        // Power Draw
+        setVal('val-power-draw', pwr.toFixed(1) + ' W');
+        updateTrend('trend-power-draw', history.power_draw);
+
+        // Battery
+        setVal('val-battery', bat.toFixed(0) + '%');
+        updateTrend('trend-battery', history.battery);
+
+        // Disk I/O
+        setVal('val-disk-io', dio.toFixed(1) + ' MB/s');
+        updateTrend('trend-disk-io', history.disk_io);
+
+        // Network
+        setVal('val-network', net.toFixed(1) + ' MB/s');
+        updateTrend('trend-network', history.network);
+
+        // Center Panel Details
+        const aiRiskPercent = document.getElementById('ai-risk-percent');
+        if (aiRiskPercent) aiRiskPercent.innerText = Math.round(risk * 100) + '%';
+        
+        const aiRiskRing = document.getElementById('ai-risk-ring');
+        if (aiRiskRing) {
+            // Circle circumference is 2 * PI * 15.9155 = 100
+            const offset = 100 - (risk * 100);
+            aiRiskRing.style.strokeDashoffset = offset;
+            aiRiskRing.className = risk > 0.8 ? "text-error transition-all duration-300" : "text-primary transition-all duration-300";
+        }
+
+        // Workload Semantics & Intent UI
+        if (latestData.diagnostics) {
+            const diag = latestData.diagnostics;
+            setVal('semantic-fingerprint', diag.workload_fingerprint ? diag.workload_fingerprint.replace(/_/g, ' ') : 'UNKNOWN');
+            setVal('semantic-phase', diag.thermal_phase ? diag.thermal_phase.replace(/_/g, ' ') : 'UNKNOWN');
+            
+            if (diag.thermal_headroom !== undefined) {
+                const hr = document.getElementById('headroom-val');
+                if (hr) hr.innerText = diag.thermal_headroom.toFixed(1);
+            }
+            
+            setVal('semantic-acoustic', diag.acoustic_optimization_active ? 'COMFORT OPTIMIZATION ACTIVE' : 'NOMINAL / PERFORMANCE PRIORITY');
+            setVal('semantic-predictive-window', diag.predictive_cooling_window && diag.predictive_cooling_window !== "NONE" ? diag.predictive_cooling_window : 'NONE EXPECTED');
+            
+            if (diag.escalation_reason) {
+                setVal('semantic-escalation', diag.escalation_reason.replace(/_/g, ' '));
+            }
+            if (diag.idle_clamp_active !== undefined) {
+                setVal('semantic-idle-clamp', diag.idle_clamp_active ? 'ACTIVE' : 'INACTIVE');
+            }
+            
+            if (diag.transition_intelligence_score !== undefined) {
+                setVal('ti-score-lbl', diag.transition_intelligence_score.toFixed(1));
+                const bar = document.getElementById('ti-score-bar');
+                if (bar) bar.style.width = Math.min(100, Math.max(0, diag.transition_intelligence_score)) + '%';
+            }
+        }
+
+        // Hardware Sync State UI
+        if (latestData.diagnostics && latestData.diagnostics.hardware_controller) {
+            const hw = latestData.diagnostics.hardware_controller;
+            setVal('hw-req-mode', hw.desired_mode);
+            setVal('hw-act-mode', hw.actual_hardware_mode);
+            
+            const lockT = document.getElementById('hw-lock-timer');
+            const coolT = document.getElementById('hw-cooldown-timer');
+            const syncStatus = document.getElementById('hw-sync-status');
+            const syncMsg = document.getElementById('hw-sync-msg');
+            const panel = document.getElementById('hardware-sync-panel');
+            
+            if (lockT) lockT.innerText = hw.transition_lock_timer.toFixed(1) + 's';
+            if (coolT) coolT.innerText = hw.transition_cooldown_timer.toFixed(1) + 's';
+            
+            if (hw.hardware_sync_status === 'SYNCED') {
+                if (syncStatus) {
+                    syncStatus.innerText = 'SYNCED';
+                    syncStatus.className = 'font-data-mono text-[7px] text-secondary-container font-bold px-1.5 py-0.5 bg-secondary-container/10 border border-secondary-container/20 rounded';
+                }
+                if (syncMsg) syncMsg.innerText = 'HARDWARE CONFIRMED';
+                if (panel) panel.className = 'glass-panel rounded border border-secondary-container/30 p-2.5 flex flex-col gap-1.5 transition-all bg-secondary-container/5';
+            } else if (hw.hardware_sync_status === 'PENDING') {
+                if (syncStatus) {
+                    syncStatus.innerText = 'PENDING';
+                    syncStatus.className = 'font-data-mono text-[7px] text-tertiary-container font-bold px-1.5 py-0.5 bg-tertiary-container/10 border border-tertiary-container/20 rounded animate-pulse';
+                }
+                if (syncMsg) syncMsg.innerText = `SYNCING TO ${hw.desired_mode}...`;
+                if (panel) panel.className = 'glass-panel rounded border border-tertiary-container/50 p-2.5 flex flex-col gap-1.5 transition-all shadow-[0_0_15px_rgba(235,178,255,0.15)]';
+            } else {
+                if (syncStatus) {
+                    syncStatus.innerText = 'DESYNCED';
+                    syncStatus.className = 'font-data-mono text-[7px] text-error font-bold px-1.5 py-0.5 bg-error/10 border border-error/20 rounded heartbeat-pulse';
+                }
+                if (syncMsg) syncMsg.innerText = 'MISMATCH: RETRYING...';
+                if (panel) panel.className = 'glass-panel rounded border border-error/50 p-2.5 flex flex-col gap-1.5 transition-all bg-error/5 shadow-[0_0_15px_rgba(255,42,85,0.2)]';
+            }
+        }
+
+        // ETA & States
+        const mode = latestData.thermal_mode || "BALANCED";
+        setVal('ai-policy-val', mode);
+        setVal('ai-thermal-state-val', risk > 0.8 ? "CRITICAL" : risk > 0.5 ? "HIGH" : "NORMAL");
+        
+        const etaVal = document.getElementById('ai-spike-eta-val');
+        if (etaVal) {
+            if (risk > 0.8) {
+                etaVal.innerText = "IMMINENT (1s)";
+                etaVal.className = "font-data-mono text-[14px] text-error font-bold mt-1 pulse-error";
+            } else if (risk > 0.4) {
+                etaVal.innerText = Math.round(18 - (risk * 10)) + 's';
+                etaVal.className = "font-data-mono text-[14px] text-secondary-container font-bold mt-1";
+            } else {
+                etaVal.innerText = "NONE PREDICTED";
+                etaVal.className = "font-data-mono text-[11px] text-primary/40 font-bold mt-1";
+            }
+        }
+
+        // Latency
+        const latVal = document.getElementById('header-latency');
+        if (latVal && latestData.current_lead_time_sec !== undefined) {
+            const ms = Math.max(0.1, latestData.current_lead_time_sec * 1000);
+            latVal.innerText = ms.toFixed(1) + 'ms';
+        }
+
+        // Explainable AI Reasoning attributions
+        const explainBox = document.getElementById('ai-explain-reasoning');
+        const shapReasons = document.getElementById('shap-reasons');
+        if (explainBox && shapReasons) {
+            const diag = latestData.diagnostics || {};
+            const e_conf = diag.escalation_confidence || 0;
+            const e_reason = diag.escalation_reason || "NONE";
+            const intent = diag.predictive_intent_class || "NOMINAL";
+            const acoustic = diag.acoustic_optimization_active || false;
+            
+            let reasonsHtml = "";
+            if (risk > 0.8) {
+                reasonsHtml = `
+                    <div class="flex justify-between items-center text-error">
+                        <span class="font-bold uppercase">${e_reason.replace(/_/g, ' ')}</span>
+                        <span class="font-bold">${Math.round(e_conf * 100)}% CONFIDENCE</span>
+                    </div>
+                    <div class="flex justify-between items-center text-error/80">
+                        <span>Predictive Intent Classification</span>
+                        <span class="font-bold">${intent.replace(/_/g, ' ')}</span>
+                    </div>
+                    <div class="flex justify-between items-center text-white">
+                        <span>Transition Policy Intelligence</span>
+                        <span>ESCALATION REQUIRED</span>
+                    </div>
+                `;
+            } else if (risk > 0.4) {
+                reasonsHtml = `
+                    <div class="flex justify-between items-center ${e_conf > 0.5 ? 'text-error' : 'text-tertiary-container'}">
+                        <span>${e_reason !== 'NONE' ? e_reason.replace(/_/g, ' ') : 'MONITORING THERMAL TREND'}</span>
+                        <span class="font-bold">${Math.round(e_conf * 100)}% CONFIDENCE</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span>Predictive Intent Classification</span>
+                        <span class="text-tertiary-container font-bold">${intent.replace(/_/g, ' ')}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span>Transition Policy Intelligence</span>
+                        <span class="${e_conf > 0.5 ? 'text-white' : 'text-primary/50 text-[6.5px]'}">${e_conf > 0.5 ? 'PREPARING ESCALATION' : 'CONFIDENCE TOO LOW - WAITING FOR SUSTAINED ESCALATION'}</span>
+                    </div>
+                `;
+            } else {
+                reasonsHtml = `
+                    <div class="flex justify-between items-center text-primary/50">
+                        <span>${acoustic ? 'ACOUSTIC OPTIMIZATION ACTIVE' : 'NOMINAL THERMAL STATE'}</span>
+                        <span>0% ESCALATION CONFIDENCE</span>
+                    </div>
+                    <div class="flex justify-between items-center text-primary/50">
+                        <span>Predictive Intent</span>
+                        <span>${intent.replace(/_/g, ' ')}</span>
+                    </div>
+                    <div class="flex justify-between items-center text-primary/50">
+                        <span>Equilibrium Recovery Status</span>
+                        <span>${diag.recovery_timer > 0 ? 'STABILIZING BEFORE RECOVERY' : 'EQUILIBRIUM REACHED'}</span>
+                    </div>
+                `;
+            }
+            shapReasons.innerHTML = reasonsHtml;
+        }
+
+        // Predicted peaks comparison
+        const peakUncooled = document.getElementById('ai-peak-uncooled');
+        const peakCooled = document.getElementById('ai-peak-cooled');
+        if (peakUncooled && peakCooled) {
+            if (risk > 0.8) {
+                peakUncooled.innerText = "96.4°C";
+                peakCooled.innerText = "81.0°C";
+            } else if (risk > 0.4) {
+                peakUncooled.innerText = "89.2°C";
+                peakCooled.innerText = "75.4°C";
+            } else {
+                peakUncooled.innerText = "64.0°C";
+                peakCooled.innerText = "58.2°C";
+            }
+        }
+
+        // Active cooling pipeline progress
+        const pipeBar = document.getElementById('dash-pipeline-bar');
+        if (pipeBar) {
+            let activeStep = 0;
+            if (risk > 0.8) activeStep = 3;
+            else if (rpm > 3000) activeStep = 2;
+            else if (risk > 0.4) activeStep = 1;
+            
+            pipeBar.style.width = (activeStep * 33.3) + '%';
+            for (let i = 0; i <= 3; i++) {
+                const stepEl = document.getElementById('dash-step-' + i);
+                const stepLbl = document.getElementById('dash-step-' + i + '-lbl');
+                if (stepEl) {
+                    if (i <= activeStep) {
+                        stepEl.className = "w-3 h-3 rounded-full border border-primary bg-primary flex items-center justify-center shadow-[0_0_8px_rgba(0,229,255,0.7)]";
+                        if (stepLbl) stepLbl.className = "text-primary font-bold";
+                    } else {
+                        stepEl.className = "w-3 h-3 rounded-full border border-primary/20 bg-surface flex items-center justify-center";
+                        if (stepLbl) stepLbl.className = "";
+                    }
+                }
+            }
+        }
+
+        // Event logs
+        const alertsContainer = document.getElementById('dashboard-alerts');
+        const systemLogs = document.getElementById('system-logs');
+        if (latestData.events && latestData.events.length > 0) {
+            // First time clear static
+            if (renderedEvents.size === 0 && alertsContainer) {
+                alertsContainer.innerHTML = "";
+            }
+            if (renderedEvents.size === 0 && systemLogs) {
+                systemLogs.innerHTML = "";
+            }
+
+            for (let i = 0; i < latestData.events.length; i++) {
+                const evt = latestData.events[i];
+                const key = evt.time + '|' + evt.source + '|' + evt.message;
+                
+                if (!renderedEvents.has(key)) {
+                    renderedEvents.add(key);
+
+                    // Insert to Alert log
+                    if (alertsContainer) {
+                        let textClr = "text-primary/70";
+                        let borderClr = "border-primary/20";
+                        if (evt.category === "CRITICAL") {
+                            textClr = "text-error font-bold";
+                            borderClr = "border-error/30 bg-error/5";
+                        } else if (evt.category === "WARN") {
+                            textClr = "text-tertiary-container";
+                            borderClr = "border-tertiary-container/30 bg-tertiary-container/5";
+                        }
+                        
+                        const alertHtml = `
+                            <div class="micro-panel p-1.5 flex items-start justify-between border-l-2 ${borderClr} event-enter">
+                                <span class="text-white/40 text-[7px] shrink-0">${evt.time}</span>
+                                <span class="flex-1 ml-2 ${textClr}">${evt.message}</span>
+                                <span class="text-[7.5px] uppercase font-bold text-primary/50">${evt.source}</span>
+                            </div>
+                        `;
+                        alertsContainer.insertAdjacentHTML('afterbegin', alertHtml);
+                        while (alertsContainer.children.length > 25) {
+                            alertsContainer.removeChild(alertsContainer.lastChild);
+                        }
+                    }
+
+                    // Insert to System Logs
+                    if (systemLogs) {
+                        const logHtml = `
+                            <div class="py-0.5 border-b border-white/5 font-data-mono event-enter text-[7.5px]">
+                                <span class="text-primary/40">[${evt.time}]</span>
+                                <span class="text-secondary-container font-bold">[${evt.source}]</span>
+                                <span class="text-white/80">${evt.message}</span>
+                            </div>
+                        `;
+                        systemLogs.insertAdjacentHTML('afterbegin', logHtml);
+                        while (systemLogs.children.length > 50) {
+                            systemLogs.removeChild(systemLogs.lastChild);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Draw Left Sparklines
+        drawSparkline('spark-cpu-util', history.cpu_util, colors.primary);
+        drawSparkline('spark-gpu-util', history.gpu_util, colors.primary);
+        drawSparkline('spark-mem-util', history.mem_util, colors.primary);
+        drawSparkline('spark-cpu-temp', history.cpu_temp, colors.secondaryContainer);
+        drawSparkline('spark-gpu-temp', history.gpu_temp, colors.secondaryContainer);
+        drawSparkline('spark-fan-rpm', history.fan_rpm, colors.primary);
+        drawSparkline('spark-power-draw', history.power_draw, colors.tertiaryContainer);
+        drawSparkline('spark-battery', history.battery, colors.primary);
+        drawSparkline('spark-disk-io', history.disk_io, colors.gray);
+        drawSparkline('spark-network', history.network, colors.gray);
+
+        // Global Alert Theme shift
+        const header = document.getElementById('main-header');
+        const aiPanel = document.getElementById('ai-engine-panel');
+        if (risk > 0.8) {
+            header.className = "w-full h-12 bg-surface/90 backdrop-blur-2xl border-b border-error/50 flex items-center justify-between px-4 z-40 relative shadow-[0_4px_30px_rgba(255,42,85,0.15)] transition-all duration-500";
+            if (aiPanel) aiPanel.classList.add('critical-alert-vignette');
+        } else {
+            header.className = "w-full h-12 bg-surface/90 backdrop-blur-2xl border-b border-primary/20 flex items-center justify-between px-4 z-40 relative shadow-[0_4px_30px_rgba(0,0,0,0.5)] transition-all duration-500";
+            if (aiPanel) aiPanel.classList.remove('critical-alert-vignette');
+        }
+
+        // Predictions State Update
+        updatePredictionsState(cpu, gpu, mem, ctemp, gtemp, rpm, pwr, bat, dio, net, risk);
+
+        // Render Graph Canvas Panel if active
+        if (activeTabId === 'tab-graphs') {
+            drawAllDashboardCharts();
+        } else if (activeTabId === 'tab-predictions') {
+            renderPredictionsCanvases();
+        }
+    }
+
+    function setVal(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.innerText = val;
+    }
+
+    function updateTrend(id, hist) {
+        const el = document.getElementById(id);
+        if (!el || hist.length < 2) return;
+        const diff = hist[hist.length - 1] - hist[hist.length - 2];
+        if (diff > 5) {
+            el.innerText = '↑↑';
+            el.className = 'text-[8px] font-bold text-error';
+        } else if (diff > 0.2) {
+            el.innerText = '↑';
+            el.className = 'text-[8px] font-bold text-secondary-container';
+        } else if (diff < -0.2) {
+            el.innerText = '↓';
+            el.className = 'text-[8px] font-bold text-gray';
+        } else {
+            el.innerText = '→';
+            el.className = 'text-[8px] font-bold text-primary/40';
+        }
+    }
+
+    // High-DPI Canvas Scaling Helper
+    function setupCanvas(canvas) {
+        const dpr = window.devicePixelRatio || 1;
+        const w = canvas.parentElement.clientWidth;
+        const h = canvas.parentElement.clientHeight;
+        
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
+        canvas.width = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+        
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+
+    // Tiny sparkline rendering
+    function drawSparkline(canvasId, hist, color) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        const { ctx, w, h } = setupCanvas(canvas);
+        
+        ctx.clearRect(0, 0, w, h);
+        
+        const maxVal = Math.max(...hist, 1.0);
+        const minVal = Math.min(...hist, 0.0);
+        const range = maxVal - minVal || 1.0;
+        
+        // Shading
+        ctx.beginPath();
+        const stepX = w / (hist.length - 1);
+        ctx.moveTo(0, h);
+        for(let i = 0; i < hist.length; i++) {
+            const x = i * stepX;
+            const normY = (hist[i] - minVal) / range;
+            const y = h - 2 - normY * (h - 4);
+            ctx.lineTo(x, y);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        
+        const areaGrad = ctx.createLinearGradient(0, 0, 0, h);
+        areaGrad.addColorStop(0, color + '15');
+        areaGrad.addColorStop(1, color + '00');
+        ctx.fillStyle = areaGrad;
+        ctx.fill();
+        
+        // Stroke
+        ctx.beginPath();
+        for(let i = 0; i < hist.length; i++) {
+            const x = i * stepX;
+            const normY = (hist[i] - minVal) / range;
+            const y = h - 2 - normY * (h - 4);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.0;
+        ctx.stroke();
+    }
+
+    // --- GRAPHS VIEW: SYNCHRONIZED CHARTS ---
+    let hoverXPercent = -1;
+
+    const chartConfigs = [
+        { id: 'chart-cpu-usage', title: 'CPU Usage', key: 'cpu_util', unit: '%', color: colors.primary, threshold: 90 },
+        { id: 'chart-gpu-usage', title: 'GPU Usage', key: 'gpu_util', unit: '%', color: colors.primary, threshold: 90 },
+        { id: 'chart-ram-usage', title: 'RAM Usage', key: 'mem_util', unit: '%', color: colors.primary, threshold: 85 },
+        { id: 'chart-thermal-risk', title: 'Composite Thermal Risk', key: 'risk_score', unit: '', color: colors.error, threshold: 0.8, isRisk: true },
+        { id: 'chart-fan-rpm', title: 'Fan Rotation', key: 'fan_rpm', unit: ' RPM', color: colors.primary, threshold: 3800 },
+        { id: 'chart-power-draw', title: 'Power Consumption', key: 'power_draw', unit: 'W', color: colors.tertiaryContainer, threshold: 80 },
+        { id: 'chart-disk-io', title: 'Disk Activity', key: 'disk_io', unit: ' MB/s', color: colors.gray, threshold: 25 },
+        { id: 'chart-network-throughput', title: 'Network IO', key: 'network', unit: ' MB/s', color: colors.gray, threshold: 10 }
+    ];
+
+    // Mouse listeners for synchronization
+    chartConfigs.forEach(cfg => {
+        const el = document.getElementById(cfg.id);
+        if (!el) return;
+        el.addEventListener('mousemove', (e) => {
+            const rect = el.getBoundingClientRect();
+            hoverXPercent = (e.clientX - rect.left) / rect.width;
+            drawAllDashboardCharts();
+        });
+        el.addEventListener('mouseleave', () => {
+            hoverXPercent = -1;
+            drawAllDashboardCharts();
+        });
+    });
+
+    function drawAllDashboardCharts() {
+        chartConfigs.forEach(cfg => {
+            drawPanelChart(cfg.id, cfg.title, history[cfg.key], cfg.unit, cfg.color, cfg.threshold, cfg.isRisk);
+        });
+    }
+
+    function drawPanelChart(canvasId, title, dataArray, unit, color, threshold, isRisk = false) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        const { ctx, w, h } = setupCanvas(canvas);
+        
+        ctx.clearRect(0, 0, w, h);
+        
+        // Draw grid
+        ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+        ctx.lineWidth = 1;
+        for(let x = 0; x < w; x += 50) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, h);
+            ctx.stroke();
+        }
+        for(let y = 0; y < h; y += 25) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+            ctx.stroke();
+        }
+        
+        // Draw 60% Past / 40% Future divider
+        const nowX = w * 0.6;
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.15)';
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.moveTo(nowX, 0);
+        ctx.lineTo(nowX, h);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        ctx.font = monoFont(8);
+        ctx.fillStyle = 'rgba(0, 229, 255, 0.3)';
+        ctx.fillText("NOW", nowX - 22, 10);
+        
+        // Draw Title
+        ctx.font = monoFont(8, true);
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillText(title.toUpperCase(), 10, 15);
+
+        if (dataArray.length < 2) return;
+
+        const maxVal = Math.max(...dataArray, threshold || 1.0);
+        const minVal = Math.min(...dataArray, 0.0);
+        const range = maxVal - minVal || 1.0;
+
+        // Draw Historical Line (takes up first 60% width)
+        ctx.beginPath();
+        const stepX = nowX / (dataArray.length - 1);
+        
+        for (let i = 0; i < dataArray.length; i++) {
+            const x = i * stepX;
+            const normY = (dataArray[i] - minVal) / range;
+            const y = h - 10 - normY * (h - 25);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Shading area under historical line
+        ctx.lineTo(nowX, h);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        const areaGrad = ctx.createLinearGradient(0, 0, 0, h);
+        areaGrad.addColorStop(0, color + '15');
+        areaGrad.addColorStop(1, color + '00');
+        ctx.fillStyle = areaGrad;
+        ctx.fill();
+
+        // Draw Future Projection (remaining 40% width)
+        ctx.beginPath();
+        const latestVal = dataArray[dataArray.length - 1];
+        const futSteps = 20;
+        const futStepX = (w - nowX) / futSteps;
+        
+        ctx.beginPath();
+        ctx.moveTo(nowX, h - 10 - ((latestVal - minVal) / range) * (h - 25));
+        
+        // Generate simulated projection based on risk score trend
+        const isSpiking = (latestData.risk_score || 0) > 0.4;
+        
+        for (let i = 1; i <= futSteps; i++) {
+            const x = nowX + i * futStepX;
+            let futVal = latestVal;
+            if (isRisk) {
+                futVal = isSpiking ? latestVal + Math.sin(i * 0.15) * 0.15 : latestVal - i * 0.005;
+            } else {
+                futVal = isSpiking ? latestVal + Math.sin(i * 0.2) * (latestVal * 0.1) : latestVal + Math.sin(i*0.1)*1;
+            }
+            futVal = Math.max(minVal, Math.min(maxVal, futVal));
+            const normY = (futVal - minVal) / range;
+            const y = h - 10 - normY * (h - 25);
+            ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = color;
+        ctx.setLineDash([2, 2]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Shaded "Predicted Thermal Event" region on risk
+        if (isRisk && isSpiking) {
+            ctx.fillStyle = 'rgba(255, 42, 85, 0.05)';
+            ctx.fillRect(nowX + (w - nowX) * 0.2, 0, (w - nowX) * 0.6, h);
+            ctx.fillStyle = 'rgba(255, 42, 85, 0.3)';
+            ctx.font = monoFont(7);
+            ctx.fillText("PREDICTED THERMAL EVENT", nowX + (w - nowX) * 0.25, h - 12);
+        }
+
+        // Draw latest value text
+        ctx.fillStyle = color;
+        ctx.font = monoFont(9, true);
+        ctx.textAlign = 'right';
+        ctx.fillText(latestVal.toFixed(1) + unit, w - 10, 15);
+        ctx.textAlign = 'left';
+
+        // Draw Threshold Line
+        if (threshold !== undefined) {
+            const normY = (threshold - minVal) / range;
+            const y = h - 10 - normY * (h - 25);
+            ctx.strokeStyle = 'rgba(255, 42, 85, 0.25)';
+            ctx.setLineDash([2, 4]);
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(255, 42, 85, 0.5)';
+            ctx.font = monoFont(6.5);
+            ctx.fillText('CRITICAL LIMIT', 10, y - 2);
+        }
+
+        // Draw synchronized hover cursor
+        if (hoverXPercent >= 0 && hoverXPercent <= 1.0) {
+            const curX = w * hoverXPercent;
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(curX, 0);
+            ctx.lineTo(curX, h);
+            ctx.stroke();
+
+            // Calculate hovered index value
+            let hoverVal = 0.0;
+            if (curX <= nowX) {
+                const idx = Math.round((curX / nowX) * (dataArray.length - 1));
+                if (dataArray[idx] !== undefined) hoverVal = dataArray[idx];
+            } else {
+                const pct = (curX - nowX) / (w - nowX);
+                const step = Math.round(pct * futSteps);
+                if (isRisk) {
+                    hoverVal = isSpiking ? latestVal + Math.sin(step * 0.15) * 0.15 : latestVal - step * 0.005;
+                } else {
+                    hoverVal = isSpiking ? latestVal + Math.sin(step * 0.2) * (latestVal * 0.1) : latestVal + Math.sin(step * 0.1) * 1;
+                }
+            }
+            hoverVal = Math.max(minVal, Math.min(maxVal, hoverVal));
+
+            // Tooltip box
+            ctx.fillStyle = 'rgba(0,0,0,0.85)';
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 1;
+            const boxW = 55;
+            const boxH = 15;
+            const boxX = curX + boxW > w ? curX - boxW - 5 : curX + 5;
+            const boxY = 20;
+            ctx.fillRect(boxX, boxY, boxW, boxH);
+            ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = monoFont(7.5);
+            ctx.fillText(hoverVal.toFixed(1) + unit, boxX + 4, boxY + 10);
+        }
+    }
+
+    // --- PREDICTIONS VIEW & AI LOGIC ---
+    let predState = {
+        mode: 'BALANCED',
+        lastTransition: Date.now(),
+        recoveryProgress: 0,
+        stabEta: 0,
+        cause: "System initialization",
+        confidencePhase: 0,
+        bottlenecks: [],
+        actions: [],
+        peakUncooled: 0,
+        peakCooled: 0
+    };
+
+    const horizonSelect = document.getElementById('horizon-select');
+    if (horizonSelect) {
+        horizonSelect.addEventListener('change', () => {
+            if (activeTabId === 'tab-predictions') drawHorizonProjection();
+        });
+    }
+
+    function updatePredictionsState(cpu, gpu, mem, ctemp, gtemp, rpm, pwr, bat, dio, net, risk) {
+        const now = Date.now();
+        
+        // 1. Thermal State Machine Logic (Hysteresis & Idle Relaxation)
+        if (!predState.conditionStartTimes) {
+            predState.conditionStartTimes = { FAILSAFE: 0, PERFORMANCE: 0, RECOVERY: 0, IDLE: 0 };
+        }
+
+        const isIdle = cpu < 20 && gpu < 15;
+        let nextMode = predState.mode;
+        let cause = predState.cause;
+        
+        // Track conditions
+        if (risk > 0.85 || ctemp > 92 || gtemp > 88) {
+            if (predState.conditionStartTimes.FAILSAFE === 0) predState.conditionStartTimes.FAILSAFE = now;
+        } else {
+            predState.conditionStartTimes.FAILSAFE = 0;
+        }
+
+        if (risk > 0.55) {
+            if (predState.conditionStartTimes.PERFORMANCE === 0) predState.conditionStartTimes.PERFORMANCE = now;
+        } else {
+            predState.conditionStartTimes.PERFORMANCE = 0;
+        }
+
+        if (predState.mode === 'FAILSAFE' && risk < 0.45 && ctemp < 80 && gtemp < 75) {
+            if (predState.conditionStartTimes.RECOVERY === 0) predState.conditionStartTimes.RECOVERY = now;
+        } else {
+            predState.conditionStartTimes.RECOVERY = 0;
+        }
+
+        if (isIdle && ctemp < 60 && gtemp < 55) {
+            if (predState.conditionStartTimes.IDLE === 0) predState.conditionStartTimes.IDLE = now;
+        } else {
+            predState.conditionStartTimes.IDLE = 0;
+        }
+
+        const failsafeDuration = predState.conditionStartTimes.FAILSAFE ? (now - predState.conditionStartTimes.FAILSAFE) / 1000 : 0;
+        const perfDuration = predState.conditionStartTimes.PERFORMANCE ? (now - predState.conditionStartTimes.PERFORMANCE) / 1000 : 0;
+        const recDuration = predState.conditionStartTimes.RECOVERY ? (now - predState.conditionStartTimes.RECOVERY) / 1000 : 0;
+        const idleDuration = predState.conditionStartTimes.IDLE ? (now - predState.conditionStartTimes.IDLE) / 1000 : 0;
+
+        // Transitions
+        if (ctemp >= 95 || gtemp >= 90) {
+            nextMode = 'FAILSAFE';
+            cause = "Critical thermal threshold exceeded";
+        } else if (predState.mode !== 'FAILSAFE') {
+            if (failsafeDuration > 8) {
+                nextMode = 'FAILSAFE';
+                cause = "Sustained power draw exceeded threshold";
+            } else if (perfDuration > 5 && ['BALANCED', 'QUIET', 'RECOVERY'].includes(predState.mode)) {
+                nextMode = 'PERFORMANCE';
+                cause = "GPU thermal ramp detected";
+            }
+        }
+
+        if (predState.mode === 'FAILSAFE') {
+            if (recDuration > 20 || idleDuration > 30) {
+                nextMode = 'RECOVERY';
+                cause = "Cooling normalization in progress";
+                predState.recoveryProgress = 0;
+            }
+        } else if (predState.mode === 'RECOVERY') {
+            predState.recoveryProgress += 1.5;
+            if (predState.recoveryProgress >= 100 || idleDuration > 30 || risk < 0.3) {
+                nextMode = 'BALANCED';
+                cause = "Returning to balanced mode";
+            }
+        } else if (predState.mode === 'PERFORMANCE') {
+            if ((risk < 0.45 && perfDuration === 0) || idleDuration > 30) {
+                nextMode = 'BALANCED';
+                cause = "Returning to balanced mode";
+            }
+        } else if (predState.mode === 'BALANCED') {
+            if (idleDuration > 45 || (risk < 0.2 && ctemp < 50)) {
+                nextMode = 'QUIET';
+                cause = "Low thermal dissipation required";
+            }
+        } else if (predState.mode === 'QUIET') {
+            if (risk > 0.35) {
+                nextMode = 'BALANCED';
+                cause = "Nominal thermal equilibrium";
+            }
+        }
+
+        if (nextMode !== predState.mode) {
+            predState.mode = nextMode;
+            predState.lastTransition = now;
+            predState.cause = cause;
+            predState.stabEta = nextMode === 'RECOVERY' || nextMode === 'FAILSAFE' ? 15 + Math.random()*10 : 0;
+        } else {
+            if (predState.stabEta > 0) predState.stabEta = Math.max(0, predState.stabEta - 0.1);
+        }
+
+        // 2. Bottleneck Detection
+        const bn = [];
+        if (gtemp > 75) bn.push({ name: "GPU Memory Controller", sev: Math.min(100, (gtemp-60)*2.5), weight: 65, dir: risk > 0.5 ? '↑' : '→' });
+        if (cpu > 70) bn.push({ name: "CPU Package Power", sev: Math.min(100, (cpu-40)*1.8), weight: 50, dir: cpu > 80 ? '↑' : '↓' });
+        if (mem > 80) bn.push({ name: "VRAM Saturation", sev: mem, weight: 35, dir: '→' });
+        if (rpm > 4000) bn.push({ name: "Fan Curve Limitation", sev: Math.min(100, (rpm-3000)/20), weight: 45, dir: '↑' });
+        if (pwr > 100) bn.push({ name: "Power Delivery Constraint", sev: Math.min(100, (pwr-80)*2), weight: 40, dir: '→' });
+        
+        bn.sort((a,b) => b.sev - a.sev);
+        predState.bottlenecks = bn;
+
+        // 3. Peak Comparison
+        predState.peakUncooled = Math.max(60, gtemp + (risk * 25) + (cpu * 0.1));
+        predState.peakCooled = Math.max(50, gtemp + (risk * 5) - (rpm / 1000));
+
+        // 4. Predicted Actions
+        const actions = [];
+        if (risk > 0.7) {
+            actions.push({ title: "Pre-cooling escalation", conf: 98, eta: 1.5, impact: "-12°C", state: "active" });
+            actions.push({ title: "GPU power attenuation", conf: 85, eta: 3.0, impact: "-5°C", state: "preparing" });
+        } else if (risk > 0.4) {
+            actions.push({ title: "Fan ramp increase", conf: 92, eta: 4.5, impact: "-8°C", state: "queued" });
+            actions.push({ title: "Legion profile switch", conf: 76, eta: 8.0, impact: "Stable", state: "queued" });
+        } else if (predState.mode === 'RECOVERY') {
+            actions.push({ title: "Stabilization lock", conf: 99, eta: predState.stabEta, impact: "Maintain", state: "stabilizing" });
+        } else if (rpm > 2500 && risk < 0.2) {
+            actions.push({ title: "Quiet mode restoration", conf: 88, eta: 12.0, impact: "+2°C", state: "queued" });
+        } else {
+            actions.push({ title: "Maintain current policy", conf: 100, eta: 0, impact: "0°C", state: "completed" });
+        }
+        predState.actions = actions;
+
+        // Update DOM if tab is active
+        if (activeTabId === 'tab-predictions') {
+            updatePredictionsDOM(risk);
+        }
+    }
+
+    function updatePredictionsDOM(risk) {
+        // State Machine
+        const states = ['quiet', 'balanced', 'performance', 'failsafe', 'recovery'];
+        states.forEach(s => {
+            const el = document.getElementById('psm-' + s);
+            if (!el) return;
+            if (s === predState.mode.toLowerCase()) {
+                el.className = `psm-node flex flex-col items-center gap-1 p-2 rounded border ${s==='failsafe'?'border-error shadow-[0_0_15px_rgba(255,42,85,0.4)] bg-error/20':'border-primary shadow-[0_0_15px_rgba(0,229,255,0.4)] bg-primary/20'} transition-all duration-500`;
+            } else {
+                el.className = `psm-node flex flex-col items-center gap-1 p-2 rounded border ${s==='failsafe'?'border-error/20':'border-primary/10'} opacity-50 transition-all duration-500`;
+            }
+        });
+
+        const elapsed = Math.floor((Date.now() - predState.lastTransition) / 1000);
+        setVal('pred-state-timestamp', `LAST TRANSITION: -${elapsed}s`);
+        setVal('pred-cur-state', predState.mode);
+        setVal('pred-state-cause', predState.cause);
+        
+        if (predState.mode === 'RECOVERY') {
+            setVal('pred-stab-eta', predState.stabEta.toFixed(1) + 's');
+            document.getElementById('pred-stab-bar').style.width = predState.recoveryProgress + '%';
+            document.getElementById('pred-stab-bar').className = 'h-full bg-primary transition-all duration-500 rounded';
+        } else if (predState.mode === 'FAILSAFE') {
+            setVal('pred-stab-eta', 'ESCALATING');
+            document.getElementById('pred-stab-bar').style.width = '100%';
+            document.getElementById('pred-stab-bar').className = 'h-full bg-error transition-all duration-500 rounded pulse-error';
+        } else {
+            setVal('pred-stab-eta', 'STABLE');
+            document.getElementById('pred-stab-bar').style.width = '100%';
+            document.getElementById('pred-stab-bar').className = 'h-full bg-primary/30 transition-all duration-500 rounded';
+        }
+
+        // Model Health
+        setVal('pred-inf-latency', (4.2 + Math.random()*0.8).toFixed(2) + 'ms');
+        setVal('pred-stability', (98.5 - risk*5 + Math.random()).toFixed(1) + '%');
+        setVal('pred-conf-drift', (risk * 2.5).toFixed(2) + '%');
+        setVal('pred-telem-integrity', '100%');
+
+        // Bottlenecks
+        const bnList = document.getElementById('pred-bottleneck-list');
+        if (bnList && predState.bottlenecks.length > 0) {
+            const top = predState.bottlenecks[0];
+            setVal('pred-primary-bottleneck-label', `PRIMARY: ${top.name}`);
+            
+            bnList.innerHTML = predState.bottlenecks.slice(0,3).map(b => `
+                <div class="micro-panel p-1.5 flex flex-col gap-1">
+                    <div class="flex justify-between items-center text-[7.5px]">
+                        <span class="${b.sev>80?'text-error':'text-white'}">${b.name}</span>
+                        <span class="text-primary/60">${b.weight}% thermal contribution</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="flex-1 h-1 bg-black rounded overflow-hidden">
+                            <div class="h-full ${b.sev>80?'bg-error':'bg-tertiary-container'} transition-all" style="width:${b.sev}%"></div>
+                        </div>
+                        <span class="${b.sev>80?'text-error':'text-tertiary-container'} w-8 text-right">${b.sev.toFixed(0)}% ${b.dir}</span>
+                    </div>
+                </div>
+            `).join('');
+        } else if (bnList) {
+            setVal('pred-primary-bottleneck-label', 'NO BOTTLENECKS');
+            bnList.innerHTML = '<div class="text-primary/40 p-2 text-center">System operating within optimal thermal envelope</div>';
+        }
+
+        // Actions
+        const actList = document.getElementById('predicted-actions-list');
+        if (actList) {
+            setVal('pred-actions-count', `${predState.actions.length} ACTIONS`);
+            actList.innerHTML = predState.actions.map(a => {
+                let sCol = "text-primary/60";
+                let iClass = "material-symbols-outlined text-[10px]";
+                let icon = "pending";
+                if (a.state === 'active') { sCol = "text-secondary-container animate-pulse"; icon = "autorenew"; }
+                if (a.state === 'queued') { icon = "queue"; }
+                if (a.state === 'completed') { sCol = "text-primary"; icon = "check_circle"; }
+                if (a.state === 'stabilizing') { sCol = "text-tertiary-container"; icon = "health_and_safety"; }
+                if (a.state === 'preparing') { sCol = "text-error"; icon = "clock_loader_40"; }
+                
+                return `
+                <div class="micro-panel p-2 flex flex-col gap-1 border-l-2 ${a.state==='active'?'border-secondary-container':'border-white/10'}">
+                    <div class="flex justify-between items-center">
+                        <span class="text-white font-bold">${a.title}</span>
+                        <span class="text-primary/80">${a.conf}% CONF</span>
+                    </div>
+                    <div class="flex justify-between items-center text-[7px]">
+                        <span class="${sCol} flex items-center gap-1 uppercase"><span class="${iClass}">${icon}</span> ${a.state}</span>
+                        <span>ETA: ${a.eta>0 ? a.eta.toFixed(1)+'s' : 'Now'}</span>
+                        <span class="text-secondary-container">Impact: ${a.impact}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // Peak Comparison
+        setVal('pred-peak-uncooled', predState.peakUncooled.toFixed(1) + '°C');
+        setVal('pred-peak-cooled', predState.peakCooled.toFixed(1) + '°C');
+        const reduction = predState.peakUncooled - predState.peakCooled;
+        setVal('pred-thermal-reduction', `-${reduction.toFixed(1)}°C`);
+        document.getElementById('pred-reduction-bar').style.width = Math.min(100, (reduction / 20) * 100) + '%';
+
+        // AI Reasoning
+        const reasonEl = document.getElementById('pred-ai-reasoning');
+        if (reasonEl) {
+            if (risk > 0.7) {
+                reasonEl.innerHTML = `
+                    <div class="flex items-start gap-1.5"><span class="text-error mt-0.5">•</span><span>Projected hotspot detected in ${(15 - risk*10).toFixed(1)}s</span></div>
+                    <div class="flex items-start gap-1.5"><span class="text-error mt-0.5">•</span><span>GPU memory controller exceeding thermal envelope</span></div>
+                    <div class="flex items-start gap-1.5 text-secondary-container"><span class="text-secondary-container mt-0.5">•</span><span>Pre-cooling intervention highly recommended</span></div>
+                `;
+            } else if (risk > 0.4) {
+                reasonEl.innerHTML = `
+                    <div class="flex items-start gap-1.5"><span class="text-tertiary-container mt-0.5">•</span><span>GPU load exceeded rolling thermal threshold</span></div>
+                    <div class="flex items-start gap-1.5"><span class="text-primary/60 mt-0.5">•</span><span>Fan curve adapting to sustained workload</span></div>
+                `;
+            } else {
+                reasonEl.innerHTML = `
+                    <div class="flex items-start gap-1.5"><span class="text-primary mt-0.5">•</span><span>Thermal state stable within operational limits</span></div>
+                    <div class="flex items-start gap-1.5"><span class="text-primary/60 mt-0.5">•</span><span>No immediate interventions forecasted</span></div>
+                `;
+            }
+        }
+    }
+
+    function renderPredictionsCanvases() {
+        drawHorizonProjection();
+        drawConfidenceDistribution();
+        drawRiskTimelineCanvas();
+    }
+
+    function drawHorizonProjection() {
+        const canvas = document.getElementById('horizon-projection-canvas');
+        if (!canvas) return;
+        const { ctx, w, h } = setupCanvas(canvas);
+        
+        ctx.clearRect(0,0,w,h);
+        
+        // Grid
+        ctx.strokeStyle = 'rgba(255,255,255,0.015)';
+        for(let x=0; x<w; x+=40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+        for(let y=0; y<h; y+=20) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+
+        const horizonSelect = document.getElementById('horizon-select');
+        const horizon = parseInt(horizonSelect?.value || "30");
+        
+        // Current Time Separator
+        const nowX = w * 0.4;
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.3)';
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath(); ctx.moveTo(nowX, 0); ctx.lineTo(nowX, h); ctx.stroke();
+        ctx.setLineDash([]);
+        
+        ctx.fillStyle = 'rgba(0, 229, 255, 0.5)';
+        ctx.font = monoFont(7);
+        ctx.fillText("CURRENT", nowX - 45, 12);
+        ctx.fillText("HORIZON", nowX + 5, 12);
+
+        // Data prep
+        const gpuHist = history.gpu_temp;
+        if(gpuHist.length < 2) return;
+        const maxT = Math.max(85, Math.max(...gpuHist) + 15);
+        const minT = Math.min(30, Math.min(...gpuHist) - 10);
+        const range = maxT - minT;
+
+        // Draw Historical (Left 40%)
+        ctx.beginPath();
+        const stepX = nowX / (gpuHist.length - 1);
+        for (let i = 0; i < gpuHist.length; i++) {
+            const x = i * stepX;
+            const y = h - ((gpuHist[i] - minT) / range) * h;
+            if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        }
+        ctx.strokeStyle = colors.primary;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw Future Projection (Right 60%)
+        const latestVal = gpuHist[gpuHist.length-1];
+        const risk = latestData.risk_score || 0;
+        const isCritical = risk > 0.7;
+        
+        // Confidence cone
+        ctx.fillStyle = isCritical ? 'rgba(255, 42, 85, 0.1)' : 'rgba(0, 229, 255, 0.05)';
+        ctx.beginPath();
+        const startY = h - ((latestVal - minT) / range) * h;
+        ctx.moveTo(nowX, startY);
+        
+        // Spread logic
+        const endYBase = h - ((predState.peakUncooled - minT) / range) * h;
+        const spread = h * (0.1 + risk * 0.2); // wider if risky
+        
+        ctx.bezierCurveTo(nowX + (w-nowX)*0.3, startY, w - (w-nowX)*0.3, endYBase - spread, w, endYBase - spread);
+        ctx.lineTo(w, endYBase + spread);
+        ctx.bezierCurveTo(w - (w-nowX)*0.3, endYBase + spread, nowX + (w-nowX)*0.3, startY, nowX, startY);
+        ctx.fill();
+
+        // Projected Path
+        ctx.beginPath();
+        ctx.moveTo(nowX, startY);
+        ctx.bezierCurveTo(nowX + (w-nowX)*0.4, startY - (startY-endYBase)*0.2, w - (w-nowX)*0.4, endYBase, w, endYBase);
+        ctx.strokeStyle = isCritical ? colors.error : colors.tertiaryContainer;
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Cooldown Trajectory (if cooling applied)
+        const endYCooled = h - ((predState.peakCooled - minT) / range) * h;
+        ctx.beginPath();
+        ctx.moveTo(nowX, startY);
+        ctx.bezierCurveTo(nowX + (w-nowX)*0.5, startY, w - (w-nowX)*0.5, endYCooled, w, endYCooled);
+        ctx.strokeStyle = colors.secondaryContainer;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Intervention point
+        if (risk > 0.4) {
+            const intX = nowX + (w-nowX)*0.25;
+            const intY = startY - (startY-endYBase)*0.3; // Approx curve pos
+            ctx.fillStyle = colors.secondaryContainer;
+            ctx.beginPath(); ctx.arc(intX, intY, 4, 0, 2*Math.PI); ctx.fill();
+            ctx.beginPath(); ctx.arc(intX, intY, 8 + Math.sin(Date.now()/150)*2, 0, 2*Math.PI); ctx.stroke();
+            
+            ctx.fillStyle = '#fff';
+            ctx.fillText("INTERVENTION", intX - 25, intY - 12);
+        }
+    }
+
+    function drawConfidenceDistribution() {
+        const canvas = document.getElementById('confidence-distribution-canvas');
+        if (!canvas) return;
+        const { ctx, w, h } = setupCanvas(canvas);
+        ctx.clearRect(0,0,w,h);
+        
+        predState.confidencePhase += 0.05; // Animation time
+
+        const barCount = 40;
+        const barW = (w - 20) / barCount;
+        const risk = latestData.risk_score || 0;
+        
+        // Bell curve center mapped to risk
+        const centerIdx = Math.floor(barCount * risk);
+        const spread = 4 + (1 - risk) * 8; // high risk = tighter confidence
+        
+        let totalConf = 0;
+        const heights = [];
+        
+        for (let i = 0; i < barCount; i++) {
+            // Gaussian base
+            const dist = i - centerIdx;
+            let val = Math.exp(-(dist*dist)/(2*spread*spread));
+            // Add noise and animation
+            val += Math.sin(predState.confidencePhase + i*0.5) * 0.05;
+            val = Math.max(0.02, Math.min(1, val));
+            heights.push(val);
+            totalConf += val;
+        }
+
+        // Variance / Conf DOM update
+        setVal('pred-variance', `±${(spread*0.5).toFixed(2)}`);
+        setVal('pred-conf-pct', `${(98 - risk*10 + Math.sin(predState.confidencePhase)*2).toFixed(1)}%`);
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+        for(let y=0; y<h; y+=15) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+
+        for (let i = 0; i < barCount; i++) {
+            const val = heights[i];
+            const barH = val * (h - 25);
+            const x = 10 + i * barW;
+            const y = h - 15 - barH;
+
+            // Color based on position relative to threshold
+            let color = colors.secondaryContainer;
+            if (i > barCount * 0.7) color = colors.error; // High risk region
+            else if (i < barCount * 0.3) color = colors.gray; // Low risk
+
+            const grad = ctx.createLinearGradient(0, y, 0, h - 15);
+            grad.addColorStop(0, color);
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+            ctx.fillStyle = grad;
+            ctx.fillRect(x + 1, y, barW - 2, barH);
+        }
+
+        // Labels
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = monoFont(7);
+        ctx.fillText("LOW CERTAINTY", 10, h - 4);
+        ctx.textAlign = "center";
+        ctx.fillText("STABLE FORECAST", w/2, h - 4);
+        ctx.textAlign = "right";
+        ctx.fillText("HIGH CONFIDENCE", w - 10, h - 4);
+    }
+
+    function drawRiskTimelineCanvas() {
+        const canvas = document.getElementById('pred-risk-timeline-canvas');
+        if (!canvas) return;
+        const { ctx, w, h } = setupCanvas(canvas);
+        ctx.clearRect(0,0,w,h);
+
+        const risk = latestData.risk_score || 0;
+        
+        // Base track
+        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+        ctx.fillRect(0, h/2 - 2, w, 4);
+
+        // Animated progress based on risk looking ahead
+        const gradient = ctx.createLinearGradient(0, 0, w, 0);
+        gradient.addColorStop(0, colors.primary);
+        gradient.addColorStop(0.5, colors.tertiaryContainer);
+        gradient.addColorStop(1, colors.error);
+
+        const fillW = w * Math.min(1, risk * 1.5 + 0.1);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, h/2 - 2, fillW, 4);
+
+        // Nodes: Normalization, Escalation, Intervention, Stabilization
+        const nodes = [
+            { pct: 0.1, label: "Norm", active: true },
+            { pct: 0.4, label: "Escalation", active: risk > 0.3 },
+            { pct: 0.7, label: "Intervention", active: risk > 0.6 },
+            { pct: 0.9, label: "Stabilization", active: predState.mode === 'RECOVERY' || risk > 0.8 }
+        ];
+
+        nodes.forEach(n => {
+            const nx = w * n.pct;
+            ctx.beginPath();
+            ctx.arc(nx, h/2, 5, 0, 2*Math.PI);
+            ctx.fillStyle = n.active ? '#fff' : '#000';
+            ctx.fill();
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = n.active ? colors.primary : 'rgba(255,255,255,0.3)';
+            if (n.label === 'Intervention' && n.active) ctx.strokeStyle = colors.error;
+            ctx.stroke();
+
+            // Label
+            ctx.fillStyle = n.active ? '#fff' : 'rgba(255,255,255,0.4)';
+            ctx.font = monoFont(7);
+            ctx.textAlign = "center";
+            ctx.fillText(n.label, nx, h/2 - 10);
+        });
+    }
+
+    // Initial load
+    switchTab('tab-dashboard');
+    streamTelemetry();
+</script>
+</body>
+</html>

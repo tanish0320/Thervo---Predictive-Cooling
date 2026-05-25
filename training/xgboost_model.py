@@ -34,7 +34,6 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 import joblib
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from typing import Dict, List, Optional
 
@@ -95,7 +94,7 @@ class ThermalRiskXGB:
         X:              np.ndarray,
         y:              np.ndarray,
         val_fraction:   float = 0.15,
-        early_stopping: int   = 30,
+        early_stopping: Optional[int] = None,
         verbose:        bool  = True,
     ) -> Dict:
         """
@@ -132,14 +131,22 @@ class ThermalRiskXGB:
                 f"Ensure data_processing.build_training_dataset() was used."
             )
 
-        X_tr, X_val, y_tr, y_val = train_test_split(
-            X, y, test_size=val_fraction, random_state=42
-        )
+        # Sequential train/val split to prevent autocorrelation leakage (Task 7)
+        n_samples = len(X)
+        split_idx = int(n_samples * (1.0 - val_fraction))
+        X_tr, y_tr = X[:split_idx], y[:split_idx]
+        X_val, y_val = X[split_idx:], y[split_idx:]
 
-        self.model.set_params(
-            early_stopping_rounds=early_stopping,
-            verbosity=1 if verbose else 0,
-        )
+        if early_stopping and early_stopping > 0:
+            self.model.set_params(
+                early_stopping_rounds=early_stopping,
+                verbosity=1 if verbose else 0,
+            )
+        else:
+            self.model.set_params(
+                early_stopping_rounds=None,
+                verbosity=1 if verbose else 0,
+            )
         self.model.fit(
             X_tr, y_tr,
             eval_set=[(X_val, y_val)],
@@ -258,12 +265,25 @@ def train_from_csv(
     state_save_path : where to save the preprocessor state.
     """
     from data_processing import build_training_dataset
+    from metrics import calculate_regression_metrics, evaluate_predictive_performance, print_performance_summary
+    
     raw_df = pd.read_csv(csv_path)
     X, y, _ = build_training_dataset(raw_df, state_save_path=state_save_path)
 
     model = ThermalRiskXGB()
     model.train(X, y, verbose=verbose)
     model.save(model_save_path)
+    
+    # Run evaluation on validation slice and print summary
+    n_samples = len(X)
+    split_idx = int(n_samples * 0.85)  # 85% train, 15% validation
+    X_val, y_val = X[split_idx:], y[split_idx:]
+    y_pred = model.predict(X_val)
+    
+    reg_m = calculate_regression_metrics(y_val, y_pred)
+    event_m = evaluate_predictive_performance(y_val, y_pred)
+    
+    print_performance_summary(reg_m, event_m)
     return model
 
 
@@ -276,7 +296,7 @@ if __name__ == "__main__":
 
     print("\n[SMOKE TEST] xgboost_model.py")
     raw = generate_synthetic_telemetry(n_rows=300, seed=1)
-    X, y, proc = build_training_dataset(raw, state_save_path="/tmp/preprocessor_state_xgb.pkl")
+    X, y, proc = build_training_dataset(raw, state_save_path="preprocessor_state_xgb_smoke.pkl")
 
     print(f"\n  X shape      : {X.shape}   (expected: (300, {FEATURE_DIM}))")
     assert X.shape[1] == FEATURE_DIM, f"Feature dim mismatch: {X.shape[1]} != {FEATURE_DIM}"

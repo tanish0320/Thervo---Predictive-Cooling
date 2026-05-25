@@ -1,0 +1,24 @@
+profiles:
+  gaming_demo:
+    workload: "CS2_Sim"
+    duration_sec: 120
+    mode: "predictive"
+    replay_export: true
+  
+  overheating_prevention:
+    workload: "Blender_Sim"
+    duration_sec: 180
+    mode: "predictive"
+    replay_export: true
+    
+  predictive_vs_reactive:
+    workload: "Mixed_Multitasking"
+    duration_sec: 240
+    mode: "dual"
+    replay_export: true
+    
+  fan_oscillation:
+    workload: "Browser_Chaos"
+    duration_sec: 90
+    mode: "reactive"
+    replay_export: true

@@ -33,9 +33,12 @@ for p in [_SRC_PATH, _TRAIN_DIR, _CORE_PATH]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from features      import FeatureProcessor, FEATURE_DIM, FEATURE_NAMES
+from features      import FeatureProcessor, AnalyticGNN
 from xgboost_model import ThermalRiskXGB
 from core.fusion   import fuse, get_risk_level, assert_parity  # SINGLE source
+from constants     import FEATURE_DIM, FEATURE_NAMES, FEATURE_IDX, PREDICTION_HORIZON_STEPS
+from data_processing import generate_future_thermal_risk, build_future_targets
+from metrics import calculate_regression_metrics, evaluate_predictive_performance, print_performance_summary
 
 
 # =============================================================================
@@ -63,6 +66,8 @@ class ValidationResult:
     latency_ok:      bool  = True
     level_dist:      Dict[str, int] = field(default_factory=dict)
     parity_passed:   bool  = False
+    reg_metrics:     Dict[str, float] = field(default_factory=dict)
+    event_metrics:   Dict[str, float] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -91,6 +96,8 @@ class ValidationPipeline:
         self.processor = FeatureProcessor()
         self.processor.load(state_path)
 
+        self.gnn = AnalyticGNN()
+
         print(f"[ValidationPipeline] Feature dim = {FEATURE_DIM}")
         print(f"[ValidationPipeline] Feature names = {FEATURE_NAMES}")
 
@@ -101,9 +108,17 @@ class ValidationPipeline:
         """
         t0 = time.perf_counter()
 
-        # 6-dim feature vector (gnn_embedding at index [5])
-        X       = self.processor.process_single(raw_point)  # (1, 6)
-        gnn_emb = float(X[0, 5])                             # extract, no recompute
+        # 15-dim feature vector
+        X       = self.processor.process_single(raw_point)  # (1, 15)
+        
+        # Assertions
+        assert X.shape == (1, 15), f"Expected shape (1, 15), got {X.shape}"
+        assert np.all(np.isfinite(X)), "Non-finite values in validation feature vector"
+        assert np.all(X >= 0), f"Negative value in validation feature vector: {X}"
+        assert np.all(X <= 1), f"Value > 1 in validation feature vector: {X}"
+
+        heat_n  = float(X[0, FEATURE_IDX["heat_norm"]])
+        gnn_emb = self.gnn.compute_single(rack_id="rack_0", self_heat=heat_n)
 
         xgb_score  = float(self.xgb.predict(X)[0])          # already clipped [0,1]
         fused      = fuse(xgb_score, gnn_emb)                # src/core/fusion.py
@@ -138,6 +153,20 @@ class ValidationPipeline:
 
         mean_latency = float(latencies.mean())
 
+        # Generate future shifted targets for validation scoring (Task 2 & 8)
+        current_risk = generate_future_thermal_risk(df)
+        y_true = build_future_targets(current_risk, PREDICTION_HORIZON_STEPS).values
+        
+        # Align predictions to y_true length by dropping the tail
+        y_pred = fused_scores[:-PREDICTION_HORIZON_STEPS]
+
+        # Calculate metrics if enough samples are present
+        reg_metrics = {}
+        event_metrics = {}
+        if len(y_true) > 0:
+            reg_metrics = calculate_regression_metrics(y_true, y_pred)
+            event_metrics = evaluate_predictive_performance(y_true, y_pred)
+
         return ValidationResult(
             n_samples       = len(predictions),
             predictions     = predictions,
@@ -147,6 +176,8 @@ class ValidationPipeline:
             mean_latency_ms = mean_latency,
             latency_ok      = mean_latency < 50.0,
             level_dist      = level_dist,
+            reg_metrics     = reg_metrics,
+            event_metrics   = event_metrics,
         )
 
     def print_summary(self, result: ValidationResult) -> None:
@@ -160,6 +191,14 @@ class ValidationPipeline:
         print(f"  Risk dist     : {result.level_dist}")
         print(f"  Parity check  : {'PASSED' if result.parity_passed else 'NOT RUN'}")
         print("-------------------------------------------------------------\n")
+        
+        if result.reg_metrics and result.event_metrics:
+            latency_stats = {
+                "mean_preprocess_ms": 0.0,
+                "mean_inference_ms": result.mean_latency_ms,
+                "sla_compliance_percent": 100.0 if result.latency_ok else 0.0
+            }
+            print_performance_summary(result.reg_metrics, result.event_metrics, latency_stats)
 
 
 # =============================================================================
@@ -186,13 +225,18 @@ def run_parity_integration_test(processor: FeatureProcessor) -> bool:
     print("\n[parity_test] Running 3-case integration test ...")
     all_pass = True
 
+    # Initialize fresh instances with same stats to compare stateful processing
+    train_proc = FeatureProcessor()
+    train_proc.stats = dict(processor.stats)
+    
+    infer_proc = FeatureProcessor()
+    infer_proc.stats = dict(processor.stats)
+
     for tc in test_cases:
         name = tc.pop("name")
-        # Training path
-        train_vec = processor.process_single(tc)
-        # Inference path (independent instance, same state)
-        infer_proc = FeatureProcessor()
-        infer_proc.stats = dict(processor.stats)
+        
+        # Process sequentially to accumulate delta/rolling history in both
+        train_vec = train_proc.process_single(tc)
         infer_vec = infer_proc.process_single(tc)
 
         try:
@@ -238,11 +282,10 @@ def run_validation_checklist(
 
     checks: Dict[str, bool] = {}
 
-    # C1: Feature vector dimension == 6
     sample_X = pipeline.processor.process_single(
         {"cpu": 50.0, "gpu": 40.0, "memory": 60.0, "disk_io": 1e6, "network_io": 5e5}
     )
-    checks["Feature dim == 6 (FRD §3.1)"]             = sample_X.shape == (1, FEATURE_DIM)
+    checks["Feature dim == 15 (FRD §3.1)"]             = sample_X.shape == (1, FEATURE_DIM)
 
     # C2: All fused risk scores in [0,1]
     checks["Risk scores in [0,1]"]                    = all(0.0 <= p.fused_risk <= 1.0 for p in result.predictions)

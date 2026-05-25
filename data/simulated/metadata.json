@@ -1,0 +1,28 @@
+{
+    "dataset_type": "simulated_behavioral_advanced",
+    "generated_rows": 150000,
+    "seed": 42,
+    "scenarios_included": {
+        "A_Idle": 40000,
+        "M_WaveBurst": 30000,
+        "N_FalseAlarm": 25000,
+        "G_Cooldown": 15000,
+        "I_OscillationStress": 10000,
+        "K_LongDrift": 10000,
+        "J_WorkloadTransition": 10000,
+        "E_MixedChaos": 5000,
+        "B_GPUSpike": 5000
+    },
+    "events": {
+        "overheating_count": 5730,
+        "thermal_spikes": 8026,
+        "stabilization_success": 13107,
+        "cooling_overreaction": 612
+    },
+    "cooling": {
+        "mean_fan_speed": 39.20670666666667,
+        "mean_efficiency_score": 60.100386666666665,
+        "mean_stability_score": 92.67091772594819
+    },
+    "ambient_temp": 25.0
+}

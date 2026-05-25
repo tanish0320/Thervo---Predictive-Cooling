@@ -1,0 +1,30 @@
+# config/cooling_policy.yaml
+# Configuration for the Predictive Cooling Orchestration Layer
+
+prediction:
+  horizon_seconds: 30
+
+policy:
+  # Risk thresholds to determine the cooling state and base fan speed
+  # Map: future_risk -> target_fan_speed
+  risk_thresholds:
+    0.00: 30  # < 0.30 -> 30% (IDLE)
+    0.30: 45  # 0.30 - 0.50 -> 45% (ELEVATED)
+    0.50: 65  # 0.50 - 0.70 -> 65% (HIGH_RISK)
+    0.70: 85  # 0.70 - 0.85 -> 85% (CRITICAL)
+    0.85: 100 # > 0.85 -> 100% (CRITICAL MAX)
+
+  # Hysteresis margins to prevent oscillation
+  hysteresis_margin_risk: 0.05
+  cooldown_hold_seconds: 10
+  stabilization_window_seconds: 5
+
+  # Fan Ramp Smoothing (max % change per second)
+  max_fan_ramp_up_per_sec: 10.0
+  max_fan_ramp_down_per_sec: 2.0
+
+emergency:
+  # Thermal override thresholds (requires physical sensors, used as fallback)
+  cpu_temp_override: 90.0
+  gpu_temp_override: 85.0
+  override_fan_speed: 100.0

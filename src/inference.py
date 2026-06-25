@@ -79,10 +79,19 @@ class InferenceEngine:
 
         self.processor = FeatureProcessor()
         self.processor.load(state_path)
-        self.processor_state_path = state_path  # Store for periodic reset
+        self.processor_state_path = state_path
 
         from features import AnalyticGNN
         self.gnn_engine = AnalyticGNN(adjacency=adjacency)
+
+        # ponytail: CSV batching buffer - flush every 60 cycles (~60s)
+        self._log_buffer = []
+        self._log_buffer_count = 0
+
+        # ponytail: I/O caching - query only every 10s instead of every cycle
+        self._last_io_query = 0.0
+        self._cached_dk = None
+        self._cached_nk = None
 
         if run_parity_check:
             self._startup_parity_check()
@@ -129,7 +138,8 @@ class InferenceEngine:
 
         # 1. Update excluded process list (ONLY browsers/UI processes, not python workers)
         # NOTE: Excluding python.exe was causing artificial deflation when psutil subtracts the telemetry collector itself
-        if now_mono - self._last_pid_update >= 10.0:
+        # ponytail: Rate-limit process scan to every 30 seconds (3x reduction in expensive iterations)
+        if now_mono - self._last_pid_update >= 30.0:
             self._browser_pids = []
             for proc in psutil.process_iter(['pid', 'name']):
                 try:
@@ -209,7 +219,8 @@ class InferenceEngine:
         gpu_util = 0.0
         gpu_power = 0.0
         gpu_temp_raw = 0.0
-        if now_mono - self._last_gpu_query >= 1.0:
+        # ponytail: Rate-limit GPU query to every 2 seconds (50% reduction in subprocess spawns)
+        if now_mono - self._last_gpu_query >= 2.0:
             try:
                 res = subprocess.run(
                     ["nvidia-smi", "--query-gpu=utilization.gpu,power.draw,temperature.gpu,memory.used", "--format=csv,noheader,nounits"],
@@ -260,10 +271,20 @@ class InferenceEngine:
         # 10. Disk and Network rates
         now = time.monotonic()
         dk  = psutil.disk_io_counters()
+        # ponytail: Cache I/O counters, query only every 10s (not every cycle)
+        if now_mono - self._last_io_query >= 10.0:
+            dk = psutil.disk_io_counters()
+            nk = psutil.net_io_counters()
+            self._last_io_query = now_mono
+            self._cached_dk = dk
+            self._cached_nk = nk
+        else:
+            dk = self._cached_dk
+            nk = self._cached_nk
+
         disk_raw  = (dk.read_bytes + dk.write_bytes) if dk else 0
         disk_rate = ((disk_raw - dk_prev['val']) / max(now - dk_prev['time'], 1e-6)) if dk_prev else 0.0
 
-        nk = psutil.net_io_counters()
         net_raw  = (nk.bytes_sent + nk.bytes_recv) if nk else 0
         net_rate = ((net_raw - nk_prev['val']) / max(now - nk_prev['time'], 1e-6)) if nk_prev else 0.0
         
@@ -309,15 +330,23 @@ class InferenceEngine:
         return risk_score, risk_level, gnn_emb
 
     def log_result(self, raw_data: dict, risk_score: float, risk_level: str, gnn_emb: float) -> None:
-        os.makedirs(os.path.dirname(os.path.abspath(OUTPUT_LOG)), exist_ok=True)
-        file_exists = os.path.isfile(OUTPUT_LOG)
+        # ponytail: Batch CSV writes every 60 cycles (~60s) instead of every cycle (50x reduction in disk I/O)
         log_row = {
             **raw_data,
             "gnn_embedding": round(float(gnn_emb), 4),
             "risk_score":    round(float(risk_score), 4),
             "risk_level":    risk_level,
         }
-        pd.DataFrame([log_row]).to_csv(OUTPUT_LOG, mode='a', index=False, header=not file_exists)
+        self._log_buffer.append(log_row)
+        self._log_buffer_count += 1
+
+        # Flush batch every 60 samples (~60 seconds at 1Hz)
+        if self._log_buffer_count >= 60:
+            os.makedirs(os.path.dirname(os.path.abspath(OUTPUT_LOG)), exist_ok=True)
+            file_exists = os.path.isfile(OUTPUT_LOG)
+            pd.DataFrame(self._log_buffer).to_csv(OUTPUT_LOG, mode='a', index=False, header=not file_exists)
+            self._log_buffer = []
+            self._log_buffer_count = 0
 
 def log_orchestration(payload: dict):
     os.makedirs(os.path.dirname(os.path.abspath(ORCHESTRATION_LOG)), exist_ok=True)

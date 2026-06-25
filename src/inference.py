@@ -32,7 +32,7 @@ if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
 from features import FeatureProcessor, validate_raw_input, REQUIRED_KEYS
-from cooling_policy import CoolingPolicyEngine
+from thermal_mode_controller import ThermalModeController
 from fan_controller import HardwareFanController
 
 # Import fusion from the SINGLE SOURCE OF TRUTH
@@ -79,6 +79,7 @@ class InferenceEngine:
 
         self.processor = FeatureProcessor()
         self.processor.load(state_path)
+        self.processor_state_path = state_path  # Store for periodic reset
 
         from features import AnalyticGNN
         self.gnn_engine = AnalyticGNN(adjacency=adjacency)
@@ -99,21 +100,164 @@ class InferenceEngine:
         validate_raw_input(raw_data)
 
     def collect_telemetry(self, dk_prev: dict, nk_prev: dict) -> tuple:
+        from collections import deque
         ts  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cpu = psutil.cpu_percent(interval=None)
+        now_mono = time.monotonic()
+        
+        # Initialize caching, filtering and history attributes if not present
+        if not hasattr(self, "_own_pid"):
+            self._own_pid = os.getpid()
+            self._own_proc = psutil.Process(self._own_pid)
+            self._browser_pids = []
+            self._last_pid_update = 0.0
+            
+            # Deques for rolling filters to smooth utilization jitter
+            self._cpu_history = deque(maxlen=5)
+            self._gpu_history = deque(maxlen=5)
+            
+            # Thermal smoothing state (fallback thermal inertia)
+            self._cpu_temp_smooth = 40.0
+            self._gpu_temp_smooth = 38.0
+            
+            # Cached values for query rate limit
+            self._cached_cpu = 0.0
+            self._cached_gpu_util = 0.0
+            self._cached_gpu_power = 0.0
+            self._cached_gpu_temp = 0.0
+            self._last_cpu_query = 0.0
+            self._last_gpu_query = 0.0
+
+        # 1. Update excluded process list (ONLY browsers/UI processes, not python workers)
+        # NOTE: Excluding python.exe was causing artificial deflation when psutil subtracts the telemetry collector itself
+        if now_mono - self._last_pid_update >= 10.0:
+            self._browser_pids = []
+            for proc in psutil.process_iter(['pid', 'name']):
+                try:
+                    name_lower = proc.info['name'].lower() if proc.info['name'] else ""
+                    # Only exclude BROWSER processes, not python.exe (that's legitimate work)
+                    if name_lower in ("msedge.exe", "chrome.exe", "firefox.exe", "brave.exe", "opera.exe"):
+                        self._browser_pids.append(proc.pid)
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            self._last_pid_update = now_mono
+
+        # 2. Get system CPU percent (use blocking interval for fresh measurement)
+        # NOTE: interval=None returns cached value from 1s ago, which breaks in 1-second polling
+        # Use interval=0.0 to get fresh CPU% without blocking, or interval=0.1 for accuracy
+        # psutil.cpu_percent() already measures actual CPU load fairly
+        raw_psutil_cpu = psutil.cpu_percent(interval=0.1)  # 100ms blocking read for fresh value
+        self._cached_cpu = raw_psutil_cpu
+        self._last_cpu_query = now_mono
+
+        sys_cpu = self._cached_cpu
+
+        # 3. Calculate browser-only CPU consumption (optional smoothing, not subtraction)
+        # We use this only for informational purposes, not for filtering the main CPU metric
+        browser_cpu_sum = 0.0
+        for pid in self._browser_pids:
+            try:
+                proc = psutil.Process(pid)
+                browser_cpu_sum += proc.cpu_percent(interval=None)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+
+        # Use raw system CPU as the authoritative metric
+        filtered_cpu = max(0.0, sys_cpu)
+        
+        # 4. CPU Package Power Query / Estimation
+        cpu_power = 0.0
+        # Try to query CPU Package Power from OpenHardwareMonitor WMI
+        if sys.platform == "win32":
+            try:
+                res = subprocess.run(
+                    [
+                        "powershell",
+                        "-NoProfile",
+                        "-Command",
+                        (
+                            "Get-WmiObject -Namespace root/OpenHardwareMonitor "
+                            "-Class Sensor | Where-Object {$_.SensorType -eq 'Power' "
+                            "-and $_.Name -like '*CPU*'} | "
+                            "Select-Object -First 1 -ExpandProperty Value"
+                        ),
+                    ],
+                    capture_output=True, text=True, timeout=1,
+                )
+                if res.returncode == 0 and res.stdout.strip():
+                    cpu_power = float(res.stdout.strip())
+            except Exception:
+                pass
+                
+        if cpu_power <= 0.0:
+            # Fallback estimation for Intel i7-14700HX (Base TDP 55W)
+            cpu_power = 7.0 + 85.0 * (filtered_cpu / 100.0)
+            
+        # 5. Use filtered_cpu directly without power weighting (power is for thermal estimation only)
+        # Power is NOT equivalent to utilization and should not be converted 1:1
+        # Keep filtered_cpu as the authoritative utilization metric
+        blended_cpu = filtered_cpu
+        
+        # Use raw CPU directly without smoothing buffer
+        # The 5-point rolling average causes lag and inflation during transients
+        # Smoothing should be done at the policy layer, not the telemetry layer
+        smooth_cpu = blended_cpu
+        
+        # 6. Memory query
         mem = psutil.virtual_memory().percent
-
-        gpu = 0.0
-        try:
-            res = subprocess.run(
-                ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
-                capture_output=True, text=True, timeout=1,
-            )
-            if res.returncode == 0:
-                gpu = float(res.stdout.strip().split("\n")[0])
-        except Exception:
-            pass
-
+        
+        # 7. GPU Telemetry from nvidia-smi (All-in-one to reduce overhead)
+        gpu_util = 0.0
+        gpu_power = 0.0
+        gpu_temp_raw = 0.0
+        if now_mono - self._last_gpu_query >= 1.0:
+            try:
+                res = subprocess.run(
+                    ["nvidia-smi", "--query-gpu=utilization.gpu,power.draw,temperature.gpu,memory.used", "--format=csv,noheader,nounits"],
+                    capture_output=True, text=True, timeout=1,
+                )
+                if res.returncode == 0:
+                    parts = res.stdout.strip().split(",")
+                    if len(parts) >= 3:
+                        gpu_util = float(parts[0].strip())
+                        gpu_power = float(parts[1].strip())
+                        gpu_temp_raw = float(parts[2].strip())
+            except Exception:
+                pass
+            self._cached_gpu_util = gpu_util
+            self._cached_gpu_power = gpu_power
+            self._cached_gpu_temp = gpu_temp_raw
+            self._last_gpu_query = now_mono
+        else:
+            gpu_util = self._cached_gpu_util
+            gpu_power = self._cached_gpu_power
+            gpu_temp_raw = self._cached_gpu_temp
+            
+        # 8. Workload-aware GPU filtering with smooth transition
+        # Use a continuous sigmoid-like filter instead of hard thresholds to avoid discontinuities
+        # Power threshold: 15W, Utilization threshold: 12%
+        power_factor = min(1.0, max(0.0, (gpu_power - 10.0) / 5.0))  # Smooth ramp 10-15W
+        util_factor = min(1.0, max(0.0, (gpu_util - 5.0) / 10.0))    # Smooth ramp 5-15%
+        filter_confidence = max(power_factor, util_factor)  # Either can enable GPU tracking
+        filtered_gpu = gpu_util * filter_confidence  # Scale utilization by filter confidence
+            
+        # Use raw GPU directly without smoothing buffer (same reasoning as CPU)
+        smooth_gpu = filtered_gpu
+        
+        # 9. Thermal Inertia Simulation for Fallback Temperatures
+        # Smooth CPU temperature
+        target_cpu_temp = 38.0 + 0.42 * smooth_cpu
+        self._cpu_temp_smooth += 0.08 * (target_cpu_temp - self._cpu_temp_smooth)
+        cpu_temp = self._cpu_temp_smooth
+        
+        # Smooth GPU temperature (use nvidia-smi reading if available, else fallback smooth)
+        if gpu_temp_raw > 0.0:
+            gpu_temp = gpu_temp_raw
+        else:
+            target_gpu_temp = 38.0 + 0.45 * smooth_gpu
+            self._gpu_temp_smooth += 0.08 * (target_gpu_temp - self._gpu_temp_smooth)
+            gpu_temp = self._gpu_temp_smooth
+            
+        # 10. Disk and Network rates
         now = time.monotonic()
         dk  = psutil.disk_io_counters()
         disk_raw  = (dk.read_bytes + dk.write_bytes) if dk else 0
@@ -122,18 +266,25 @@ class InferenceEngine:
         nk = psutil.net_io_counters()
         net_raw  = (nk.bytes_sent + nk.bytes_recv) if nk else 0
         net_rate = ((net_raw - nk_prev['val']) / max(now - nk_prev['time'], 1e-6)) if nk_prev else 0.0
-
+        
         raw_data = {
             "timestamp":  ts,
-            "cpu":        cpu,
-            "gpu":        gpu,
-            "memory":     mem,
+            "cpu":        round(smooth_cpu, 2),
+            "gpu":        round(smooth_gpu, 2),
+            "memory":     round(mem, 2),
             "disk_io":    max(0.0, disk_rate),
             "network_io": max(0.0, net_rate),
-            # Mocking temperature for testing fail-safes when real sensors are missing
-            "cpu_temp":   40.0 + 0.3 * cpu, 
-            "gpu_temp":   45.0 + 0.3 * gpu
+            "cpu_temp":   round(cpu_temp, 1), 
+            "gpu_temp":   round(gpu_temp, 1),
+            "cpu_power":  round(cpu_power, 2),
+            "gpu_power":  round(gpu_power, 2),
+            # Support both format keys for backend consumers
+            "cpu_util":   round(smooth_cpu, 2),
+            "gpu_util":   round(smooth_gpu, 2),
+            "mem_util":   round(mem, 2),
+            "power_draw": round(cpu_power + gpu_power, 2),
         }
+        
         return (
             raw_data,
             {"val": disk_raw, "time": now},
@@ -189,7 +340,7 @@ def main():
 
     try:
         engine = InferenceEngine(run_parity_check=True)
-        policy_engine = CoolingPolicyEngine()
+        policy_engine = ThermalModeController()
         fan_controller = HardwareFanController()
     except Exception as exc:
         print(f"[FATAL] Initialization failed: {exc}")

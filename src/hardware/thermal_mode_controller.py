@@ -20,6 +20,10 @@ class ThermalModeController:
             
         self.desired_mode = "BALANCED"
         self.actual_hardware_mode = "BALANCED"
+        
+        # Query initial hardware mode on startup to avoid boot desync
+        self.actual_hardware_mode = self.get_current_mode_from_hardware()
+        self.desired_mode = self.actual_hardware_mode
         self.sync_status = "SYNCED"
         
         self.last_transition_time = 0.0
@@ -32,7 +36,7 @@ class ThermalModeController:
         self.rejected_transitions = 0
         self.llt_response_status = "OK"
         
-        logger.info(f"ThermalModeController initialized with CLI path: {self.cli_path}")
+        logger.info(f"ThermalModeController initialized with CLI path: {self.cli_path}. Detected mode: {self.actual_hardware_mode}")
 
     def get_current_mode_from_hardware(self) -> str:
         """Queries actual hardware state from Lenovo Legion Toolkit."""
@@ -66,6 +70,19 @@ class ThermalModeController:
     def reconcile(self) -> bool:
         """State consistency validation. Ensures hardware matches desired."""
         now = time.time()
+        
+        # Periodic query to sync with manual changes (every 5 seconds)
+        if not hasattr(self, "_last_hw_query_time"):
+            self._last_hw_query_time = 0.0
+            
+        if (now - self._last_hw_query_time) >= 5.0:
+            self._last_hw_query_time = now
+            actual = self.get_current_mode_from_hardware()
+            if actual != self.actual_hardware_mode:
+                logger.info(f"Manual hardware mode change detected: {self.actual_hardware_mode} -> {actual}")
+                self.actual_hardware_mode = actual
+                self.desired_mode = actual
+                self.sync_status = "SYNCED"
         
         if self.actual_hardware_mode == self.desired_mode:
             self.sync_status = "SYNCED"
@@ -144,8 +161,8 @@ class ThermalModeController:
                     self.rejected_transitions += 1
                     return False
                     
-                # Check cooldown
-                if (now - self.last_attempt_time) < self.mode_transition_cooldown:
+                # Check cooldown (between successful transitions)
+                if (now - self.last_transition_time) < self.mode_transition_cooldown:
                     self.rejected_transitions += 1
                     return False
 

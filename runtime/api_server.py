@@ -51,7 +51,7 @@ class TelemetryHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def log_message(self, format, *args):
-        pass  # Disable logging to avoid spam
+        print(f"[API HTTP] {format % args}")
 
 class APIServer:
     def __init__(self, bus, manager=None):

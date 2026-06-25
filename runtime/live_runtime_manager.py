@@ -12,7 +12,7 @@ from .dual_runtime_comparison import DualRuntimeComparison
 from .api_server import APIServer
 from .final_benchmark_exporter import FinalBenchmarkExporter
 
-from src.cooling_policy import CoolingPolicyEngine
+from src.thermal_mode_controller import ThermalModeController
 
 class LiveRuntimeManager:
     def __init__(self):
@@ -27,7 +27,7 @@ class LiveRuntimeManager:
         self.api_server = APIServer(self.stream_bus, self)
         self.benchmark_exporter = FinalBenchmarkExporter()
         
-        self.cooling_policy = CoolingPolicyEngine()
+        self.cooling_policy = ThermalModeController()
         self.last_thermal_mode = None
         
         # Live mode variables
@@ -106,11 +106,14 @@ class LiveRuntimeManager:
             if self.mode_live:
                 try:
                     raw_data, self.dk_prev, self.nk_prev = self.inference_engine.collect_telemetry(self.dk_prev, self.nk_prev)
-                    # If WMI/sensors aren't configured or active, we estimate values
-                    if raw_data.get("cpu_temp", 0.0) <= 0.0:
-                        raw_data["cpu_temp"] = 40.0 + 0.35 * raw_data["cpu"]
-                    if raw_data.get("gpu_temp", 0.0) <= 0.0:
-                        raw_data["gpu_temp"] = 38.0 + 0.35 * raw_data["gpu"]
+                    # Use reported temps if available; fallback temp estimation relies on raw values
+                    # NOTE: raw_data['cpu'] and ['gpu'] already include smoothing, don't re-estimate if sensor data is present
+                    # Only estimate if no sensor data AND if raw values are very low (indicating offline state)
+                    if raw_data.get("cpu_temp", 0.0) <= 0.0 and raw_data.get("cpu", 0.0) > 50:
+                        # Only estimate if CPU is actively loaded; idle machines shouldn't estimate
+                        raw_data["cpu_temp"] = 40.0 + 0.25 * raw_data["cpu"]
+                    if raw_data.get("gpu_temp", 0.0) <= 0.0 and raw_data.get("gpu", 0.0) > 50:
+                        raw_data["gpu_temp"] = 38.0 + 0.25 * raw_data["gpu"]
                         
                     cpu_util = raw_data["cpu"]
                     gpu_util = raw_data["gpu"]
@@ -220,11 +223,10 @@ class LiveRuntimeManager:
             
             # Override if health is FAILSAFE
             if health_status["status"] == "FAILSAFE":
-                self.cooling_policy.thermal_controller.set_mode("FAILSAFE", reason="HEALTH_FAILSAFE")
-                self.cooling_policy.thermal_controller.reconcile()
-                self.cooling_policy.current_thermal_mode = self.cooling_policy.thermal_controller.get_current_mode()
+                self.cooling_policy.hardware_controller.set_mode("PERFORMANCE", reason="HEALTH_FAILSAFE")
+                self.cooling_policy.hardware_controller.reconcile()
                 
-            thermal_mode = self.cooling_policy.current_thermal_mode
+            thermal_mode = self.cooling_policy.active_mode.name
             
             # Handle event triggers on mode changes
             if thermal_mode != self.last_thermal_mode:

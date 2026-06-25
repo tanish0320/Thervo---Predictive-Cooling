@@ -577,15 +577,15 @@
                 <div class="grid grid-cols-3 gap-2 text-center">
                     <div class="flex flex-col">
                         <span class="font-label-caps text-[6px] text-primary/50">ENERGY SAVED</span>
-                        <span class="font-data-mono text-[11px] text-secondary-container font-bold mt-0.5">14.2%</span>
+                        <span id="eff-energy-saved" class="font-data-mono text-[11px] text-secondary-container font-bold mt-0.5">--</span>
                     </div>
                     <div class="flex flex-col">
                         <span class="font-label-caps text-[6px] text-primary/50">THERMAL RED.</span>
-                        <span class="font-data-mono text-[11px] text-white font-bold mt-0.5">86.5%</span>
+                        <span id="eff-thermal-red" class="font-data-mono text-[11px] text-white font-bold mt-0.5">--</span>
                     </div>
                     <div class="flex flex-col">
                         <span class="font-label-caps text-[6px] text-primary/50">FAN OPTIM.</span>
-                        <span class="font-data-mono text-[11px] text-tertiary-container font-bold mt-0.5">91/100</span>
+                        <span id="eff-fan-optim" class="font-data-mono text-[11px] text-tertiary-container font-bold mt-0.5">--</span>
                     </div>
                 </div>
             </div>
@@ -1104,7 +1104,7 @@
         } catch (e) {
             console.error("Telemetry fetch error:", e);
         }
-        setTimeout(streamTelemetry, 100);
+        setTimeout(streamTelemetry, 500);
     }
 
     function pushHistory(key, val) {
@@ -1203,6 +1203,14 @@
                 const bar = document.getElementById('ti-score-bar');
                 if (bar) bar.style.width = Math.min(100, Math.max(0, diag.transition_intelligence_score)) + '%';
             }
+            
+            // Cooling Efficiency Score (derived from cooling_effectiveness_score)
+            if (diag.cooling_effectiveness_score !== undefined) {
+                const effScore = Math.max(0.0, Math.min(100.0, diag.cooling_effectiveness_score * 100));
+                setVal('eff-energy-saved', (effScore * 0.15).toFixed(1) + '%');
+                setVal('eff-thermal-red', (effScore * 0.85).toFixed(1) + '%');
+                setVal('eff-fan-optim', Math.round(effScore) + '/100');
+            }
         }
 
         // Hardware Sync State UI
@@ -1278,55 +1286,22 @@
             const e_conf = diag.escalation_confidence || 0;
             const e_reason = diag.escalation_reason || "NONE";
             const intent = diag.predictive_intent_class || "NOMINAL";
-            const acoustic = diag.acoustic_optimization_active || false;
+            const semantic_status = diag.semantic_status || "NOMINAL THERMAL STATE";
             
-            let reasonsHtml = "";
-            if (risk > 0.8) {
-                reasonsHtml = `
-                    <div class="flex justify-between items-center text-error">
-                        <span class="font-bold uppercase">${e_reason.replace(/_/g, ' ')}</span>
-                        <span class="font-bold">${Math.round(e_conf * 100)}% CONFIDENCE</span>
-                    </div>
-                    <div class="flex justify-between items-center text-error/80">
-                        <span>Predictive Intent Classification</span>
-                        <span class="font-bold">${intent.replace(/_/g, ' ')}</span>
-                    </div>
-                    <div class="flex justify-between items-center text-white">
-                        <span>Transition Policy Intelligence</span>
-                        <span>ESCALATION REQUIRED</span>
-                    </div>
-                `;
-            } else if (risk > 0.4) {
-                reasonsHtml = `
-                    <div class="flex justify-between items-center ${e_conf > 0.5 ? 'text-error' : 'text-tertiary-container'}">
-                        <span>${e_reason !== 'NONE' ? e_reason.replace(/_/g, ' ') : 'MONITORING THERMAL TREND'}</span>
-                        <span class="font-bold">${Math.round(e_conf * 100)}% CONFIDENCE</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span>Predictive Intent Classification</span>
-                        <span class="text-tertiary-container font-bold">${intent.replace(/_/g, ' ')}</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span>Transition Policy Intelligence</span>
-                        <span class="${e_conf > 0.5 ? 'text-white' : 'text-primary/50 text-[6.5px]'}">${e_conf > 0.5 ? 'PREPARING ESCALATION' : 'CONFIDENCE TOO LOW - WAITING FOR SUSTAINED ESCALATION'}</span>
-                    </div>
-                `;
-            } else {
-                reasonsHtml = `
-                    <div class="flex justify-between items-center text-primary/50">
-                        <span>${acoustic ? 'ACOUSTIC OPTIMIZATION ACTIVE' : 'NOMINAL THERMAL STATE'}</span>
-                        <span>0% ESCALATION CONFIDENCE</span>
-                    </div>
-                    <div class="flex justify-between items-center text-primary/50">
-                        <span>Predictive Intent</span>
-                        <span>${intent.replace(/_/g, ' ')}</span>
-                    </div>
-                    <div class="flex justify-between items-center text-primary/50">
-                        <span>Equilibrium Recovery Status</span>
-                        <span>${diag.recovery_timer > 0 ? 'STABILIZING BEFORE RECOVERY' : 'EQUILIBRIUM REACHED'}</span>
-                    </div>
-                `;
-            }
+            let reasonsHtml = `
+                <div class="flex justify-between items-center text-primary">
+                    <span class="font-bold uppercase">STATUS</span>
+                    <span class="font-bold">${semantic_status}</span>
+                </div>
+                <div class="flex justify-between items-center text-secondary-container">
+                    <span>Active Fingerprint</span>
+                    <span class="font-bold">${diag.workload_fingerprint ? diag.workload_fingerprint.replace(/_/g, ' ') : 'UNKNOWN'}</span>
+                </div>
+                <div class="flex justify-between items-center text-white">
+                    <span>Prediction Confidence</span>
+                    <span>${Math.round(e_conf * 100)}%</span>
+                </div>
+            `;
             shapReasons.innerHTML = reasonsHtml;
         }
 
@@ -1676,7 +1651,17 @@
             const x = nowX + i * futStepX;
             let futVal = latestVal;
             if (isRisk) {
-                futVal = isSpiking ? latestVal + Math.sin(i * 0.15) * 0.15 : latestVal - i * 0.005;
+                const f30 = latestData.diagnostics?.forecast_30s || latestVal;
+                const f60 = latestData.diagnostics?.forecast_60s || latestVal;
+                const f120 = latestData.diagnostics?.forecast_120s || latestVal;
+                // Interpolate using backend forecasts
+                if (i <= futSteps * 0.3) {
+                    futVal = latestVal + ((f30 - latestVal) * (i / (futSteps * 0.3)));
+                } else if (i <= futSteps * 0.6) {
+                    futVal = f30 + ((f60 - f30) * ((i - futSteps * 0.3) / (futSteps * 0.3)));
+                } else {
+                    futVal = f60 + ((f120 - f60) * ((i - futSteps * 0.6) / (futSteps * 0.4)));
+                }
             } else {
                 futVal = isSpiking ? latestVal + Math.sin(i * 0.2) * (latestVal * 0.1) : latestVal + Math.sin(i*0.1)*1;
             }
@@ -1741,7 +1726,16 @@
                 const pct = (curX - nowX) / (w - nowX);
                 const step = Math.round(pct * futSteps);
                 if (isRisk) {
-                    hoverVal = isSpiking ? latestVal + Math.sin(step * 0.15) * 0.15 : latestVal - step * 0.005;
+                    const f30 = latestData.diagnostics?.forecast_30s || latestVal;
+                    const f60 = latestData.diagnostics?.forecast_60s || latestVal;
+                    const f120 = latestData.diagnostics?.forecast_120s || latestVal;
+                    if (step <= futSteps * 0.3) {
+                        hoverVal = latestVal + ((f30 - latestVal) * (step / (futSteps * 0.3)));
+                    } else if (step <= futSteps * 0.6) {
+                        hoverVal = f30 + ((f60 - f30) * ((step - futSteps * 0.3) / (futSteps * 0.3)));
+                    } else {
+                        hoverVal = f60 + ((f120 - f60) * ((step - futSteps * 0.6) / (futSteps * 0.4)));
+                    }
                 } else {
                     hoverVal = isSpiking ? latestVal + Math.sin(step * 0.2) * (latestVal * 0.1) : latestVal + Math.sin(step * 0.1) * 1;
                 }
@@ -1788,96 +1782,18 @@
 
     function updatePredictionsState(cpu, gpu, mem, ctemp, gtemp, rpm, pwr, bat, dio, net, risk) {
         const now = Date.now();
+        const diag = latestData.diagnostics || {};
         
-        // 1. Thermal State Machine Logic (Hysteresis & Idle Relaxation)
-        if (!predState.conditionStartTimes) {
-            predState.conditionStartTimes = { FAILSAFE: 0, PERFORMANCE: 0, RECOVERY: 0, IDLE: 0 };
-        }
-
-        const isIdle = cpu < 20 && gpu < 15;
-        let nextMode = predState.mode;
-        let cause = predState.cause;
+        let nextMode = diag.active_mode || predState.mode;
+        let cause = diag.semantic_status || predState.cause;
         
-        // Track conditions
-        if (risk > 0.85 || ctemp > 92 || gtemp > 88) {
-            if (predState.conditionStartTimes.FAILSAFE === 0) predState.conditionStartTimes.FAILSAFE = now;
-        } else {
-            predState.conditionStartTimes.FAILSAFE = 0;
-        }
-
-        if (risk > 0.55) {
-            if (predState.conditionStartTimes.PERFORMANCE === 0) predState.conditionStartTimes.PERFORMANCE = now;
-        } else {
-            predState.conditionStartTimes.PERFORMANCE = 0;
-        }
-
-        if (predState.mode === 'FAILSAFE' && risk < 0.45 && ctemp < 80 && gtemp < 75) {
-            if (predState.conditionStartTimes.RECOVERY === 0) predState.conditionStartTimes.RECOVERY = now;
-        } else {
-            predState.conditionStartTimes.RECOVERY = 0;
-        }
-
-        if (isIdle && ctemp < 60 && gtemp < 55) {
-            if (predState.conditionStartTimes.IDLE === 0) predState.conditionStartTimes.IDLE = now;
-        } else {
-            predState.conditionStartTimes.IDLE = 0;
-        }
-
-        const failsafeDuration = predState.conditionStartTimes.FAILSAFE ? (now - predState.conditionStartTimes.FAILSAFE) / 1000 : 0;
-        const perfDuration = predState.conditionStartTimes.PERFORMANCE ? (now - predState.conditionStartTimes.PERFORMANCE) / 1000 : 0;
-        const recDuration = predState.conditionStartTimes.RECOVERY ? (now - predState.conditionStartTimes.RECOVERY) / 1000 : 0;
-        const idleDuration = predState.conditionStartTimes.IDLE ? (now - predState.conditionStartTimes.IDLE) / 1000 : 0;
-
-        // Transitions
-        if (ctemp >= 95 || gtemp >= 90) {
-            nextMode = 'FAILSAFE';
-            cause = "Critical thermal threshold exceeded";
-        } else if (predState.mode !== 'FAILSAFE') {
-            if (failsafeDuration > 8) {
-                nextMode = 'FAILSAFE';
-                cause = "Sustained power draw exceeded threshold";
-            } else if (perfDuration > 5 && ['BALANCED', 'QUIET', 'RECOVERY'].includes(predState.mode)) {
-                nextMode = 'PERFORMANCE';
-                cause = "GPU thermal ramp detected";
-            }
-        }
-
-        if (predState.mode === 'FAILSAFE') {
-            if (recDuration > 20 || idleDuration > 30) {
-                nextMode = 'RECOVERY';
-                cause = "Cooling normalization in progress";
-                predState.recoveryProgress = 0;
-            }
-        } else if (predState.mode === 'RECOVERY') {
-            predState.recoveryProgress += 1.5;
-            if (predState.recoveryProgress >= 100 || idleDuration > 30 || risk < 0.3) {
-                nextMode = 'BALANCED';
-                cause = "Returning to balanced mode";
-            }
-        } else if (predState.mode === 'PERFORMANCE') {
-            if ((risk < 0.45 && perfDuration === 0) || idleDuration > 30) {
-                nextMode = 'BALANCED';
-                cause = "Returning to balanced mode";
-            }
-        } else if (predState.mode === 'BALANCED') {
-            if (idleDuration > 45 || (risk < 0.2 && ctemp < 50)) {
-                nextMode = 'QUIET';
-                cause = "Low thermal dissipation required";
-            }
-        } else if (predState.mode === 'QUIET') {
-            if (risk > 0.35) {
-                nextMode = 'BALANCED';
-                cause = "Nominal thermal equilibrium";
-            }
-        }
-
         if (nextMode !== predState.mode) {
             predState.mode = nextMode;
             predState.lastTransition = now;
             predState.cause = cause;
-            predState.stabEta = nextMode === 'RECOVERY' || nextMode === 'FAILSAFE' ? 15 + Math.random()*10 : 0;
+            predState.stabEta = diag.saturation_eta_seconds && diag.saturation_eta_seconds > 0 ? diag.saturation_eta_seconds : 0;
         } else {
-            if (predState.stabEta > 0) predState.stabEta = Math.max(0, predState.stabEta - 0.1);
+            predState.stabEta = diag.saturation_eta_seconds && diag.saturation_eta_seconds > 0 ? diag.saturation_eta_seconds : 0;
         }
 
         // 2. Bottleneck Detection
@@ -1903,7 +1819,7 @@
         } else if (risk > 0.4) {
             actions.push({ title: "Fan ramp increase", conf: 92, eta: 4.5, impact: "-8°C", state: "queued" });
             actions.push({ title: "Legion profile switch", conf: 76, eta: 8.0, impact: "Stable", state: "queued" });
-        } else if (predState.mode === 'RECOVERY') {
+        } else if (predState.mode === 'RECOVERY' || predState.mode === 'SILENT_RECOVERY') {
             actions.push({ title: "Stabilization lock", conf: 99, eta: predState.stabEta, impact: "Maintain", state: "stabilizing" });
         } else if (rpm > 2500 && risk < 0.2) {
             actions.push({ title: "Quiet mode restoration", conf: 88, eta: 12.0, impact: "+2°C", state: "queued" });
@@ -1924,7 +1840,7 @@
         states.forEach(s => {
             const el = document.getElementById('psm-' + s);
             if (!el) return;
-            if (s === predState.mode.toLowerCase()) {
+            if (s === predState.mode.toLowerCase() || (s === 'recovery' && predState.mode.toLowerCase() === 'silent_recovery')) {
                 el.className = `psm-node flex flex-col items-center gap-1 p-2 rounded border ${s==='failsafe'?'border-error shadow-[0_0_15px_rgba(255,42,85,0.4)] bg-error/20':'border-primary shadow-[0_0_15px_rgba(0,229,255,0.4)] bg-primary/20'} transition-all duration-500`;
             } else {
                 el.className = `psm-node flex flex-col items-center gap-1 p-2 rounded border ${s==='failsafe'?'border-error/20':'border-primary/10'} opacity-50 transition-all duration-500`;
@@ -1936,7 +1852,7 @@
         setVal('pred-cur-state', predState.mode);
         setVal('pred-state-cause', predState.cause);
         
-        if (predState.mode === 'RECOVERY') {
+        if (predState.mode === 'RECOVERY' || predState.mode === 'SILENT_RECOVERY') {
             setVal('pred-stab-eta', predState.stabEta.toFixed(1) + 's');
             document.getElementById('pred-stab-bar').style.width = predState.recoveryProgress + '%';
             document.getElementById('pred-stab-bar').className = 'h-full bg-primary transition-all duration-500 rounded';
@@ -1951,10 +1867,11 @@
         }
 
         // Model Health
-        setVal('pred-inf-latency', (4.2 + Math.random()*0.8).toFixed(2) + 'ms');
-        setVal('pred-stability', (98.5 - risk*5 + Math.random()).toFixed(1) + '%');
-        setVal('pred-conf-drift', (risk * 2.5).toFixed(2) + '%');
-        setVal('pred-telem-integrity', '100%');
+        const diag = latestData.diagnostics || {};
+        setVal('pred-inf-latency', (diag.telemetry_hz ? (1000/diag.telemetry_hz).toFixed(1) : '100.0') + 'ms');
+        setVal('pred-stability', (diag.prediction_stability !== undefined ? (diag.prediction_stability * 100).toFixed(1) : '100.0') + '%');
+        setVal('pred-conf-drift', (diag.thermal_acceleration !== undefined ? diag.thermal_acceleration.toFixed(4) : '0.0000') + '/s²');
+        setVal('pred-telem-integrity', (diag.adaptive_ema_alpha !== undefined ? diag.adaptive_ema_alpha.toFixed(3) : '0.200') + ' α');
 
         // Bottlenecks
         const bnList = document.getElementById('pred-bottleneck-list');
@@ -2237,7 +2154,7 @@
             { pct: 0.1, label: "Norm", active: true },
             { pct: 0.4, label: "Escalation", active: risk > 0.3 },
             { pct: 0.7, label: "Intervention", active: risk > 0.6 },
-            { pct: 0.9, label: "Stabilization", active: predState.mode === 'RECOVERY' || risk > 0.8 }
+            { pct: 0.9, label: "Stabilization", active: predState.mode === 'RECOVERY' || predState.mode === 'SILENT_RECOVERY' || risk > 0.8 }
         ];
 
         nodes.forEach(n => {

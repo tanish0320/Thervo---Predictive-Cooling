@@ -1,0 +1,60 @@
+{
+    "predictive": {
+        "lead_time": {
+            "avg_lead_time_sec": 1.0504605526631958,
+            "max_lead_time_sec": 28,
+            "min_lead_time_sec": 1,
+            "missed_events": 0,
+            "false_positive_events": 0,
+            "stabilization_success_rate": 1.0
+        },
+        "stabilization": {
+            "overshoot_severity": 111913.09037842104,
+            "recovery_time_sec": 7497,
+            "thermal_variance": 1148.927434506894,
+            "oscillation_amplitude": 1220.0190661599663
+        },
+        "oscillation": {
+            "rapid_reversals": 0,
+            "thrashing_index": 0.11604983629587888,
+            "is_stable": true
+        },
+        "efficiency": {
+            "avg_cooling_cost_percent": 65.10133333333333,
+            "cooling_performance_ratio": 0.5002,
+            "wasted_cooling_events": 15,
+            "efficiency_score": 75.67169598192673
+        }
+    },
+    "reactive": {
+        "lead_time": {
+            "avg_lead_time_sec": 1.0541911372130273,
+            "max_lead_time_sec": 29,
+            "min_lead_time_sec": 1,
+            "missed_events": 0,
+            "false_positive_events": 0,
+            "stabilization_success_rate": 1.0
+        },
+        "stabilization": {
+            "overshoot_severity": 111986.6310986738,
+            "recovery_time_sec": 7497,
+            "thermal_variance": 1149.8559955693045,
+            "oscillation_amplitude": 1220.521909349512
+        },
+        "oscillation": {
+            "rapid_reversals": 0,
+            "thrashing_index": 0.08246486138688144,
+            "is_stable": true
+        },
+        "efficiency": {
+            "avg_cooling_cost_percent": 65.12566666666666,
+            "cooling_performance_ratio": 0.5002,
+            "wasted_cooling_events": 26,
+            "efficiency_score": 75.64384984146348
+        }
+    },
+    "comparison": {
+        "recovery_time_reduction_sec": 0,
+        "efficiency_improvement_percent": 0.03681216717765484
+    }
+}

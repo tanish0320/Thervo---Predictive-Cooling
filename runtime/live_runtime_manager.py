@@ -120,6 +120,8 @@ class LiveRuntimeManager:
                     mem_util = raw_data["memory"]
                     cpu_temp = raw_data["cpu_temp"]
                     gpu_temp = raw_data["gpu_temp"]
+                    disk_io = raw_data["disk_io"]
+                    network_io = raw_data["network_io"]
 
                     # Predict risk with live model
                     risk_score, risk_level, gnn_emb = self.inference_engine.predict(raw_data)
@@ -136,6 +138,7 @@ class LiveRuntimeManager:
                     cpu_util, gpu_util = 10.0, 5.0
                     mem_util = 45.0
                     cpu_temp, gpu_temp = 40.0, 38.0
+                    disk_io, network_io = 0.0, 0.0
                     risk_score = 0.1
                     target_rpm = 1000
                     actual_rpm = 1000
@@ -148,6 +151,7 @@ class LiveRuntimeManager:
                 cpu_util, gpu_util = 10.0, 5.0
                 mem_util = 45.0
                 cpu_temp, gpu_temp = 40.0, 38.0
+                disk_io, network_io = 0.0, 0.0
                 risk_score = 0.1
                 target_rpm = 1000
                 actual_rpm = 1000
@@ -215,7 +219,9 @@ class LiveRuntimeManager:
                 "gpu_util": gpu_util,
                 "mem_util": mem_util,
                 "cpu_temp": cpu_temp,
-                "gpu_temp": gpu_temp
+                "gpu_temp": gpu_temp,
+                "disk_io": disk_io,
+                "network_io": network_io
             }
             
             # 3. Inference & Cooling Policy Update

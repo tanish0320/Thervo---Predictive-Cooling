@@ -161,6 +161,7 @@ class InferenceEngine:
 
         sys_cpu = self._cached_cpu
 
+
         # 3. Calculate browser-only CPU consumption (optional smoothing, not subtraction)
         # We use this only for informational purposes, not for filtering the main CPU metric
         browser_cpu_sum = 0.0
@@ -173,7 +174,7 @@ class InferenceEngine:
 
         # Use raw system CPU as the authoritative metric
         filtered_cpu = max(0.0, sys_cpu)
-        
+
         # 4. CPU Package Power Query / Estimation
         cpu_power = 0.0
         # Try to query CPU Package Power from OpenHardwareMonitor WMI
@@ -244,10 +245,10 @@ class InferenceEngine:
             gpu_temp_raw = self._cached_gpu_temp
             
         # 8. Workload-aware GPU filtering with smooth transition
-        # Use a continuous sigmoid-like filter instead of hard thresholds to avoid discontinuities
-        # Power threshold: 15W, Utilization threshold: 12%
-        power_factor = min(1.0, max(0.0, (gpu_power - 10.0) / 5.0))  # Smooth ramp 10-15W
-        util_factor = min(1.0, max(0.0, (gpu_util - 5.0) / 10.0))    # Smooth ramp 5-15%
+        # FIXED: Lower thresholds to avoid zeroing out idle GPU readings
+        # Power threshold: 3W, Utilization threshold: 1%
+        power_factor = min(1.0, max(0.0, (gpu_power - 0.5) / 2.5))  # Smooth ramp 0.5-3W
+        util_factor = min(1.0, max(0.0, (gpu_util - 0.5) / 2.0))    # Smooth ramp 0.5-2.5%
         filter_confidence = max(power_factor, util_factor)  # Either can enable GPU tracking
         filtered_gpu = gpu_util * filter_confidence  # Scale utilization by filter confidence
             
@@ -287,7 +288,8 @@ class InferenceEngine:
 
         net_raw  = (nk.bytes_sent + nk.bytes_recv) if nk else 0
         net_rate = ((net_raw - nk_prev['val']) / max(now - nk_prev['time'], 1e-6)) if nk_prev else 0.0
-        
+
+
         raw_data = {
             "timestamp":  ts,
             "cpu":        round(smooth_cpu, 2),

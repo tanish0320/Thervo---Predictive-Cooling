@@ -28,6 +28,7 @@ def run_demo():
     
     # 1. Start backend runtime & API Server
     manager = LiveRuntimeManager()
+    manager.mode_live = True  # Enable real telemetry from PC
     manager.start()
     
     # Start HTTP server on port 3000

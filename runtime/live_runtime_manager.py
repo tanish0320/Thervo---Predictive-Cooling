@@ -114,25 +114,27 @@ class LiveRuntimeManager:
                         raw_data["cpu_temp"] = 40.0 + 0.25 * raw_data["cpu"]
                     if raw_data.get("gpu_temp", 0.0) <= 0.0 and raw_data.get("gpu", 0.0) > 50:
                         raw_data["gpu_temp"] = 38.0 + 0.25 * raw_data["gpu"]
-                        
+
                     cpu_util = raw_data["cpu"]
                     gpu_util = raw_data["gpu"]
+                    mem_util = raw_data["memory"]
                     cpu_temp = raw_data["cpu_temp"]
                     gpu_temp = raw_data["gpu_temp"]
-                    
+
                     # Predict risk with live model
                     risk_score, risk_level, gnn_emb = self.inference_engine.predict(raw_data)
-                    
+
                     # Map risk to dashboard RPM visual
                     target_rpm = 1000.0 + (risk_score * 2500.0)
                     actual_rpm = target_rpm
-                    
+
                     # Simulate reactive cooling curve based purely on current temp
                     reactive_risk = max((cpu_temp - 35) / 50, (gpu_temp - 40) / 50)
                     reactive_risk = min(max(reactive_risk, 0.0), 1.0)
                     reactive_rpm = 1000.0 + (reactive_risk * 2500.0)
                 except Exception as exc:
                     cpu_util, gpu_util = 10.0, 5.0
+                    mem_util = 45.0
                     cpu_temp, gpu_temp = 40.0, 38.0
                     risk_score = 0.1
                     target_rpm = 1000
@@ -141,9 +143,10 @@ class LiveRuntimeManager:
             else:
                 # Deterministic Narrative Timeline (Looping every 60 seconds)
                 cycle_time = elapsed_total % 60
-                
+
                 # Base Idle State
                 cpu_util, gpu_util = 10.0, 5.0
+                mem_util = 45.0
                 cpu_temp, gpu_temp = 40.0, 38.0
                 risk_score = 0.1
                 target_rpm = 1000
@@ -210,7 +213,7 @@ class LiveRuntimeManager:
             telemetry = {
                 "cpu_util": cpu_util,
                 "gpu_util": gpu_util,
-                "mem_util": 45.0,
+                "mem_util": mem_util,
                 "cpu_temp": cpu_temp,
                 "gpu_temp": gpu_temp
             }

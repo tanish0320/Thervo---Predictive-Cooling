@@ -20,18 +20,26 @@ class ThermalModeController:
             
         self.desired_mode = "BALANCED"
         self.actual_hardware_mode = "BALANCED"
-        
+
+        # ponytail: LLT CLI unresponsive backoff - avoid burning ~6s per tick
+        # retrying a hardware call that's already known to fail; retry every
+        # llt_backoff_sec instead of every reconcile(). Must be set before the
+        # initial hardware query below, which reads these attributes.
+        self.llt_unresponsive = False
+        self.llt_backoff_sec = 60.0
+        self.last_llt_failure_time = 0.0
+
         # Query initial hardware mode on startup to avoid boot desync
         self.actual_hardware_mode = self.get_current_mode_from_hardware()
         self.desired_mode = self.actual_hardware_mode
         self.sync_status = "SYNCED"
-        
+
         self.last_transition_time = 0.0
         self.last_attempt_time = 0.0
         self.min_hold_duration = 30.0  # Dynamic hold duration
         self.adaptive_hold_duration = 30.0
         self.mode_transition_cooldown = 5.0
-        
+
         self.last_transition_reason = "INIT"
         self.rejected_transitions = 0
         self.llt_response_status = "OK"
@@ -42,7 +50,9 @@ class ThermalModeController:
         """Queries actual hardware state from Lenovo Legion Toolkit."""
         if not os.path.exists(self.cli_path):
             return self.desired_mode
-            
+        if self.llt_unresponsive and (time.time() - self.last_llt_failure_time) < self.llt_backoff_sec:
+            return self.actual_hardware_mode
+
         try:
             result = subprocess.run(
                 [self.cli_path, "feature", "get", "power-mode"],
@@ -95,8 +105,10 @@ class ThermalModeController:
         self.sync_status = "PENDING"
         
         logger.info(f"Reconciling hardware mode to {self.desired_mode}")
-        
-        if os.path.exists(self.cli_path):
+
+        llt_in_backoff = self.llt_unresponsive and (now - self.last_llt_failure_time) < self.llt_backoff_sec
+
+        if os.path.exists(self.cli_path) and not llt_in_backoff:
             try:
                 cli_val = "balance" if self.desired_mode == "BALANCED" else self.desired_mode.lower()
                 result = subprocess.run(
@@ -107,13 +119,18 @@ class ThermalModeController:
                 )
                 if result.returncode == 0:
                     self.llt_response_status = "OK"
+                    self.llt_unresponsive = False
                 else:
                     self.llt_response_status = f"ERROR: {result.stderr.strip()}"
                     logger.warning(f"LLT set failed: {self.llt_response_status}")
+                    self.llt_unresponsive = True
+                    self.last_llt_failure_time = now
             except Exception as e:
                 self.llt_response_status = f"EXCEPTION: {e}"
                 logger.error(self.llt_response_status)
-        
+                self.llt_unresponsive = True
+                self.last_llt_failure_time = now
+
         # Verify immediately
         actual = self.get_current_mode_from_hardware()
         if actual == self.desired_mode:

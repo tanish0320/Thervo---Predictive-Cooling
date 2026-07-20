@@ -26,10 +26,13 @@ import pandas as pd
 import psutil
 from datetime import datetime
 
-# -- Resolve src/ for local imports -------------------------------------------
+# -- Resolve src/ and project root for local imports ---------------------------
 _SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.dirname(_SRC_DIR)
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 
 from features import FeatureProcessor, validate_raw_input, REQUIRED_KEYS
 from thermal_mode_controller import ThermalModeController

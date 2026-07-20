@@ -14,7 +14,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
 def run_frontend():
     print("======================================================")
-    print(" THERMAL_AI - Dashboard Web Server (Frontend Only)")
+    print(" THERVO - Dashboard Web Server (Frontend Only)")
     print("======================================================")
     
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

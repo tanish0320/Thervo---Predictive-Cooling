@@ -42,7 +42,7 @@ class LiveRuntimeManager:
         
         # Seed with initial startup logs for the cinematic dashboard
         self.events_log = [
-            {"time": time.strftime("%H:%M:%S", time.localtime(time.time() - 30)), "source": "SYS", "category": "HEALTHY", "message": "THERMAL_AI Core Ready"},
+            {"time": time.strftime("%H:%M:%S", time.localtime(time.time() - 30)), "source": "SYS", "category": "HEALTHY", "message": "THERVO Core Ready"},
             {"time": time.strftime("%H:%M:%S", time.localtime(time.time() - 15)), "source": "SENS", "category": "HEALTHY", "message": "WMI Telemetry Synced"},
             {"time": time.strftime("%H:%M:%S", time.localtime(time.time() - 5)), "source": "CORE_AI", "category": "ACTION", "message": "Initialized Quiet Mode"}
         ]

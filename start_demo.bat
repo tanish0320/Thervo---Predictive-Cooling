@@ -12,8 +12,8 @@ if %errorLevel% == 0 (
 :run
 cd /d "%~dp0"
 echo ======================================================
-echo THERMAL_AI - DEMONSTRATION LAUNCHER (ADMINISTRATOR)
+echo THERVO - DEMONSTRATION LAUNCHER (ADMINISTRATOR)
 echo ======================================================
-echo Starting THERMAL_AI demonstration...
+echo Starting THERVO demonstration...
 python scripts\run_demo.py
 pause

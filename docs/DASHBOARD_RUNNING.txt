@@ -69,7 +69,7 @@ DASHBOARD FEATURES
 ================================================================================
 
 Top Bar:
-  - THERMAL_AI Logo
+  - THERVO Logo
   - Real-time clock
   - System status indicator
 

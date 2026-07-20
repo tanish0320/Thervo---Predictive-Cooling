@@ -1,8 +1,8 @@
-# THERMAL_AI Prototype Demonstration Flow
+# THERVO Prototype Demonstration Flow
 
 ## Phase 1: Idle Stable System (0s - 10s)
 * **Visuals:** The system is at idle. Temperatures are holding low. Both Predictive RPM and Reactive RPM traces match perfectly.
-* **Narration:** "Here we see the THERMAL_AI platform actively monitoring our compute node. Right now, workloads are light, and thermal output is nominal."
+* **Narration:** "Here we see the THERVO platform actively monitoring our compute node. Right now, workloads are light, and thermal output is nominal."
 
 ## Phase 2: Heavy Workload Detected & Predictive Escallation (10s - 20s)
 * **Visuals:** Workload metrics spike. The red *Risk Curve* shoots up significantly *before* any major thermal spike registers.
@@ -18,4 +18,4 @@
 
 ## Phase 5: Recovery and Idle (45s - 60s)
 * **Visuals:** Temperatures decay smoothly back to idle. Both fan profiles ramp down.
-* **Narration:** "The workload completes, and the system efficiently spins down the arrays, saving power and extending hardware lifespan. THERMAL_AI successfully predicted, prevented, and stabilized the thermal event completely autonomously."
+* **Narration:** "The workload completes, and the system efficiently spins down the arrays, saving power and extending hardware lifespan. THERVO successfully predicted, prevented, and stabilized the thermal event completely autonomously."

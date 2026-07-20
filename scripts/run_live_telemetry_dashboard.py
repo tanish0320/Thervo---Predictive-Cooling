@@ -44,7 +44,7 @@ def run_live_dashboard():
     """Run frontend with REAL telemetry data from this PC"""
 
     print("=" * 70)
-    print(" THERMAL_AI - LIVE TELEMETRY DASHBOARD")
+    print(" THERVO - LIVE TELEMETRY DASHBOARD")
     print("=" * 70)
     print()
     print("[STARTUP] Initializing real-time thermal monitoring system...")

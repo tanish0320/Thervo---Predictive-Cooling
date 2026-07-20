@@ -21,7 +21,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
 def run_demo():
     print("======================================================")
-    print(" THERMAL_AI - Hyperscale Orchestration Mission Control")
+    print(" THERVO - Hyperscale Orchestration Mission Control")
     print(" FINAL PROTOTYPE DEMONSTRATION")
     print("======================================================")
     print("[*] Initializing predictive runtime & orchestration layers...")

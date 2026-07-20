@@ -159,3 +159,8 @@ models/*.joblib
 !models/.gitkeep
 artifacts/*
 !artifacts/.gitkeep
+data/inference_logs.csv
+runtime/orchestration_logs.csv
+runtime/fan_target.json
+runtime/bench_target.json
+preprocessor_state_xgb_smoke.pkl

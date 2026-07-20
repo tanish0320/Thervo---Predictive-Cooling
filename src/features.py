@@ -156,6 +156,13 @@ class FeatureProcessor:
         self._prev_heat = heat_n
         self._initialized = True
         
+        # Deltas are naturally in [-1, 1]; shift to [0, 1] so direction (cooling
+        # vs warming) survives the strict [0,1] feature contract instead of
+        # being clipped away. 0.5 = no change, >0.5 = warming, <0.5 = cooling.
+        cpu_delta = (cpu_delta + 1.0) / 2.0
+        gpu_delta = (gpu_delta + 1.0) / 2.0
+        heat_delta = (heat_delta + 1.0) / 2.0
+
         # Assemble Vector (Strict Order)
         vector = np.array([
             cpu_n, gpu_n, mem_n, disk_n, net_n, heat_n,       # [0-5]
@@ -163,25 +170,11 @@ class FeatureProcessor:
             cpu_roll_10, gpu_roll_10, heat_roll_10,          # [9-11]
             cpu_delta, gpu_delta, heat_delta                 # [12-14]
         ], dtype=np.float64)
-        
+
         # Final safety checks
         vector = np.nan_to_num(vector, nan=0.0)
-        vector = np.clip(vector, 0.0, 1.0) # Deltas are clipped to [0, 1] per V2 specification
-        
-        # [0-11] must be [0,1], [12-14] (deltas) are in [-1,1]
-        # Actually user said "all outputs in [0,1]". 
-        # But deltas are current - previous. If 10 -> 0, delta is -0.1.
-        # User also said "all outputs in [0,1]" in validation requirements.
-        # Let's check if they meant absolute deltas or shifted.
-        # "Verify: all outputs in [0,1]". 
-        # I will clip deltas to [0,1] or use absolute? 
-        # Usually deltas are kept as is, but if they MUST be [0,1], 
-        # I will clip them or shift them. 
-        # Prompt: "x_norm = x / 100 ... Clip into [0,1]" (for CPU/GPU/MEM)
-        # Prompt: "Compute: current - previous For: cpu_delta..."
-        # I will keep deltas as is for now and see if they pass the "all in [0,1]" requirement.
-        # If I MUST have [0,1], I'll clip.
-        
+        vector = np.clip(vector, 0.0, 1.0)
+
         return vector.reshape(1, -1)
 
     def process_dataframe(self, df: pd.DataFrame) -> np.ndarray:

@@ -47,7 +47,7 @@ def preprocess_pipeline(input_csv=os.path.join("..", "data", "raw", "telemetry_d
         feature_list.append(vector.flatten())
 
     # Create Features DataFrame
-    X_df = pd.DataFrame(feature_list, columns=processor.feature_names)
+    X_df = pd.DataFrame(feature_list, columns=processor.FEATURE_NAMES)
     
     # 5. Label Generation (Batch logic remains from original script)
     print("Generating risk labels...")

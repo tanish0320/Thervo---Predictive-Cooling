@@ -44,7 +44,7 @@ if _CORE_DIR not in sys.path:
     sys.path.insert(0, _CORE_DIR)
 
 from core.fusion import fuse, get_risk_level, assert_parity  # noqa: E402
-from constants import FEATURE_DIM, FEATURE_IDX
+from constants import FEATURE_DIM, FEATURE_IDX, GPU_NOISE_FLOOR_PCT
 
 # =============================================================================
 # CONFIGURATION
@@ -133,6 +133,12 @@ class InferenceEngine:
             self._cached_gpu_temp = 0.0
             self._last_cpu_query = 0.0
             self._last_gpu_query = 0.0
+            # Own CPU-times baseline. psutil.cpu_percent(interval=None) keeps a single
+            # process-wide baseline that every caller shares and resets, so any other
+            # cpu_percent() call in this process (e.g. telemetry_logger.py:116) steals
+            # our window and our next read reports ~0%. Tracking cpu_times ourselves
+            # makes the measurement independent of other callers.
+            self._cpu_times_prev = psutil.cpu_times()
 
         # 1. Update excluded process list (ONLY browsers/UI processes, not python workers)
         # NOTE: Excluding python.exe was causing artificial deflation when psutil subtracts the telemetry collector itself
@@ -149,13 +155,32 @@ class InferenceEngine:
                     pass
             self._last_pid_update = now_mono
 
-        # 2. Get system CPU percent (use blocking interval for fresh measurement)
-        # NOTE: interval=None returns cached value from 1s ago, which breaks in 1-second polling
-        # Use interval=0.0 to get fresh CPU% without blocking, or interval=0.1 for accuracy
-        # psutil.cpu_percent() already measures actual CPU load fairly
-        raw_psutil_cpu = psutil.cpu_percent(interval=0.1)  # 100ms blocking read for fresh value
-        self._cached_cpu = raw_psutil_cpu
-        self._last_cpu_query = now_mono
+        # 2. Get system CPU percent from our own cpu_times baseline.
+        # Task Manager averages over ~1s; a 0.1s window undersamples badly (measured
+        # 2.0% vs 6.3% at the same instant), so re-measure at most once per second
+        # even though the runtime loop ticks at 10Hz. Non-blocking: the window is the
+        # gap between our own samples, so there is nothing to sleep on.
+        if now_mono - self._last_cpu_query >= 1.0:
+            cur = psutil.cpu_times()
+            prev = self._cpu_times_prev
+            # busy = everything except idle (and iowait, which is idle-with-pending-IO
+            # on Linux; absent on Windows).
+            def _total(t):
+                return sum(v for v in t)
+
+            def _idle(t):
+                return getattr(t, 'idle', 0.0) + getattr(t, 'iowait', 0.0)
+
+            delta_total = _total(cur) - _total(prev)
+            delta_idle = _idle(cur) - _idle(prev)
+            if delta_total > 0:
+                busy_pct = 100.0 * (delta_total - delta_idle) / delta_total
+                self._cached_cpu = min(100.0, max(0.0, busy_pct))
+            # else: counters did not advance; keep the previous cached value.
+            self._cpu_times_prev = cur
+            # Stamp AFTER the read, so the 1s window is measured from when the sample
+            # completed rather than from the top of a tick that may run long.
+            self._last_cpu_query = time.monotonic()
 
         sys_cpu = self._cached_cpu
 
@@ -218,8 +243,9 @@ class InferenceEngine:
         gpu_util = 0.0
         gpu_power = 0.0
         gpu_temp_raw = 0.0
-        # ponytail: Rate-limit GPU query to every 2 seconds (50% reduction in subprocess spawns)
-        if now_mono - self._last_gpu_query >= 2.0:
+        # ponytail: Rate-limit GPU query to 1s. 2s made the dashboard visibly lag Task
+        # Manager; 1s matches the display cadence. Raise if nvidia-smi spawns cost too much.
+        if now_mono - self._last_gpu_query >= 1.0:
             try:
                 res = subprocess.run(
                     ["nvidia-smi", "--query-gpu=utilization.gpu,power.draw,temperature.gpu,memory.used", "--format=csv,noheader,nounits"],
@@ -236,19 +262,20 @@ class InferenceEngine:
             self._cached_gpu_util = gpu_util
             self._cached_gpu_power = gpu_power
             self._cached_gpu_temp = gpu_temp_raw
-            self._last_gpu_query = now_mono
+            # Stamp after the subprocess returns, not before (see CPU note above).
+            self._last_gpu_query = time.monotonic()
         else:
             gpu_util = self._cached_gpu_util
             gpu_power = self._cached_gpu_power
             gpu_temp_raw = self._cached_gpu_temp
             
-        # 8. Workload-aware GPU filtering with smooth transition
-        # FIXED: Lower thresholds to avoid zeroing out idle GPU readings
-        # Power threshold: 3W, Utilization threshold: 1%
-        power_factor = min(1.0, max(0.0, (gpu_power - 0.5) / 2.5))  # Smooth ramp 0.5-3W
-        util_factor = min(1.0, max(0.0, (gpu_util - 0.5) / 2.0))    # Smooth ramp 0.5-2.5%
-        filter_confidence = max(power_factor, util_factor)  # Either can enable GPU tracking
-        filtered_gpu = gpu_util * filter_confidence  # Scale utilization by filter confidence
+        # 8. GPU utilization is reported raw, as nvidia-smi (and Task Manager) report it.
+        # The old confidence ramp multiplied utilization by a factor that was 0 below
+        # 0.5W/0.5% and only reached 1.0 at 3W/2.5%, so light GPU load was scaled down
+        # to a fraction of its true value and idle load vanished entirely.
+        # ponytail: no filtering. If nvidia-smi jitter becomes a problem, smooth it at
+        # the policy layer (GPU_NOISE_FLOOR_PCT below) rather than distorting telemetry.
+        filtered_gpu = gpu_util if gpu_util >= GPU_NOISE_FLOOR_PCT else 0.0
             
         # Use raw GPU directly without smoothing buffer (same reasoning as CPU)
         smooth_gpu = filtered_gpu

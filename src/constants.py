@@ -4,6 +4,11 @@ FEATURE_SCHEMA_VERSION = "v2_15feature"
 
 FEATURE_DIM = 15
 
+# Calibration: GPU utilization below this reads as idle. nvidia-smi reports 1-2% on a
+# truly idle GPU on some driver/hardware combinations. Set to 0.0 to pass everything
+# through; raise it if an idle GPU still shows nonzero on your hardware.
+GPU_NOISE_FLOOR_PCT = 0.0
+
 PREDICTION_HORIZON_SEC = 30
 SAMPLING_RATE_HZ = 1
 PREDICTION_HORIZON_STEPS = PREDICTION_HORIZON_SEC * SAMPLING_RATE_HZ

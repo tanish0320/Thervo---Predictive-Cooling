@@ -14,6 +14,17 @@ from .final_benchmark_exporter import FinalBenchmarkExporter
 
 from src.thermal_mode_controller import ThermalModeController
 
+
+def _battery_percent() -> float:
+    """Battery charge %, or 0.0 on desktops / when unavailable."""
+    try:
+        import psutil
+        bat = psutil.sensors_battery()
+        return float(bat.percent) if bat else 0.0
+    except Exception:
+        return 0.0
+
+
 class LiveRuntimeManager:
     def __init__(self):
         self.clock = RuntimeClock()
@@ -34,7 +45,11 @@ class LiveRuntimeManager:
         from src.inference import InferenceEngine
         import psutil
         self.inference_engine = InferenceEngine()
-        self.mode_live = False
+        # Default to real telemetry. The scripted demo timeline below is a canned
+        # 60s animation with hardcoded values (CPU 10/95, RAM 45) that does not read
+        # the machine at all -- defaulting to it made the dashboard disagree with
+        # Task Manager by construction. Toggle to the demo via POST /toggle-mode.
+        self.mode_live = True
         dk_init = psutil.disk_io_counters()
         nk_init = psutil.net_io_counters()
         self.dk_prev = {"val": (dk_init.read_bytes + dk_init.write_bytes) if dk_init else 0, "time": time.monotonic()}
@@ -122,6 +137,8 @@ class LiveRuntimeManager:
                     gpu_temp = raw_data["gpu_temp"]
                     disk_io = raw_data["disk_io"]
                     network_io = raw_data["network_io"]
+                    power_draw = raw_data["power_draw"]
+                    battery = _battery_percent()
 
                     # Predict risk with live model
                     risk_score, risk_level, gnn_emb = self.inference_engine.predict(raw_data)
@@ -135,10 +152,15 @@ class LiveRuntimeManager:
                     reactive_risk = min(max(reactive_risk, 0.0), 1.0)
                     reactive_rpm = 1000.0 + (reactive_risk * 2500.0)
                 except Exception as exc:
-                    cpu_util, gpu_util = 10.0, 5.0
-                    mem_util = 45.0
-                    cpu_temp, gpu_temp = 40.0, 38.0
+                    # Surface the failure instead of silently showing plausible fake
+                    # numbers that look like a healthy idle machine.
+                    print(f"[LiveRuntimeManager] Live telemetry failed: {exc}")
+                    self.health_monitor.mark_telemetry()
+                    cpu_util, gpu_util = 0.0, 0.0
+                    mem_util = 0.0
+                    cpu_temp, gpu_temp = 0.0, 0.0
                     disk_io, network_io = 0.0, 0.0
+                    power_draw, battery = 0.0, 0.0
                     risk_score = 0.1
                     target_rpm = 1000
                     actual_rpm = 1000
@@ -152,6 +174,7 @@ class LiveRuntimeManager:
                 mem_util = 45.0
                 cpu_temp, gpu_temp = 40.0, 38.0
                 disk_io, network_io = 0.0, 0.0
+                power_draw, battery = 22.0, 92.0
                 risk_score = 0.1
                 target_rpm = 1000
                 actual_rpm = 1000
@@ -206,6 +229,8 @@ class LiveRuntimeManager:
                 # Add some noise
                 cpu_temp += random.uniform(-0.5, 0.5)
                 gpu_temp += random.uniform(-0.5, 0.5)
+                # Keep the scripted power draw consistent with the scripted load
+                power_draw = 15.0 + 0.35 * cpu_util + 0.55 * gpu_util
             
             # Emit warnings if needed
             if gpu_temp > 85.0:
@@ -221,7 +246,9 @@ class LiveRuntimeManager:
                 "cpu_temp": cpu_temp,
                 "gpu_temp": gpu_temp,
                 "disk_io": disk_io,
-                "network_io": network_io
+                "network_io": network_io,
+                "power_draw": power_draw,
+                "battery": battery
             }
             
             # 3. Inference & Cooling Policy Update

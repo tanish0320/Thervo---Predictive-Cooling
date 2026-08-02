@@ -4,6 +4,39 @@
 
 ---
 
+> ## ⚠️ SUPERSEDED — 2026-08-02
+>
+> **Two of this report's headline findings were wrong.** Read this section before
+> acting on anything below.
+>
+> The report never identified the actual dominant cause: `LiveRuntimeManager.mode_live`
+> defaulted to `False`, so the dashboard rendered a hardcoded 60-second demo animation
+> (`live_runtime_manager.py`) instead of reading the machine. Every number below was
+> compared against that animation, not against real telemetry.
+>
+> Corrections:
+>
+> - **"Memory shows available% instead of used%" — WRONG.** Nothing inverted memory.
+>   The backend reported `psutil.virtual_memory().percent` (used%) correctly all along.
+>   The dashboard's `45%` came from a hardcoded fallback in `Index.html`:
+>   `data.telemetry?.mem_util || 45.0 + Math.sin(...)` — a sine wave centred on 45,
+>   reached via `||` whenever `mem_util` was missing **or legitimately 0**.
+> - **"CPU inflated 5x" — WRONG, and backwards.** Live CPU read *low*, not high. The
+>   60% was the demo timeline's scripted spike. The genuine defect was
+>   `psutil.cpu_percent(interval=0.1)`: a 100 ms window undersamples badly
+>   (measured 2.0% vs 6.3% over 1 s at the same instant) where Task Manager averages ~1 s.
+> - **GPU threshold finding — correct in direction**, but lowering thresholds was not
+>   enough; the confidence ramp scaled real utilization down at light load. The ramp is
+>   now removed entirely in favour of a raw reading plus a `GPU_NOISE_FLOOR_PCT`
+>   calibration knob in `src/constants.py`.
+> - **GPU temp "always 0°C" / CPU temp "+20°C"** — both were demo-timeline artifacts
+>   (`gpu_temp = 38.0 + ...`, and `cpu_temp` scripted up to 83°C).
+>
+> All fixes landed 2026-08-02; regression coverage in `tests/test_telemetry_accuracy.py`.
+> The original text is retained below for history only.
+
+---
+
 ## FINDINGS SUMMARY
 
 | Metric | Task Manager | Dashboard | Discrepancy | Status |

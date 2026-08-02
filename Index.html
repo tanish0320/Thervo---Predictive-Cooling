@@ -1068,21 +1068,28 @@
                         updateToggleUI(data.live_mode);
                     }
                     
-                    // Derive telemetry items not returned directly by backend
-                    const cpu = data.telemetry?.cpu_util || data.telemetry?.cpu || 0;
-                    const gpu = data.telemetry?.gpu_util || data.telemetry?.gpu || 0;
-                    const mem = data.telemetry?.mem_util || 45.0 + Math.sin(Date.now() / 20000) * 2;
-                    const ctemp = data.telemetry?.cpu_temp || 40;
-                    const gtemp = data.telemetry?.gpu_temp || 38;
-                    const rpm = data.actual_rpm || 1000;
-                    
-                    // Synthetic derived metrics for full deployment dashboard
-                    const pwr = 15.0 + (cpu * 0.35) + (gpu * 0.55) + Math.sin(Date.now() / 5000) * 0.4;
-                    const bat = 92.0; // stable power draw
-                    const dio = Math.max(0.1, 0.1 + (cpu * 0.08) + Math.cos(Date.now() / 3000) * 0.1);
-                    const net = Math.max(0.2, 0.4 + (cpu * 0.02) + Math.sin(Date.now() / 4000) * 0.2);
-                    
-                    const risk = data.risk_score || 0.0;
+                    // Use ?? not ||: a legitimate reading of 0 (idle GPU, zero disk IO)
+                    // is falsy and was silently replaced by the fallback below.
+                    const t = data.telemetry ?? {};
+                    const cpu = t.cpu_util ?? t.cpu ?? 0;
+                    const gpu = t.gpu_util ?? t.gpu ?? 0;
+                    // mem previously fell back to a 45%-centred sine wave, which is what
+                    // the dashboard displayed instead of real RAM whenever mem_util was
+                    // missing or 0. Show the real value or nothing.
+                    const mem = t.mem_util ?? 0;
+                    const ctemp = t.cpu_temp ?? 0;
+                    const gtemp = t.gpu_temp ?? 0;
+                    const rpm = data.actual_rpm ?? 0;
+
+                    // Real values from the backend where available. These were previously
+                    // synthesized from cpu with sine-wave jitter and never measured.
+                    // disk_io/network_io arrive as bytes/sec; show MB/s.
+                    const pwr = t.power_draw ?? 0;
+                    const bat = t.battery ?? 0;
+                    const dio = (t.disk_io ?? 0) / 1e6;
+                    const net = (t.network_io ?? 0) / 1e6;
+
+                    const risk = data.risk_score ?? 0.0;
 
                     // Push to history queues
                     pushHistory('cpu_util', cpu);

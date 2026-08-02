@@ -157,6 +157,9 @@ models/*.pkl
 models/*.pt
 models/*.joblib
 !models/.gitkeep
+# Serving artifacts the runtime loads at startup - a fresh clone needs both.
+!models/cooling_model.pkl
+!models/preprocessor_state.pkl
 artifacts/*
 !artifacts/.gitkeep
 data/inference_logs.csv

@@ -91,11 +91,6 @@ class InferenceEngine:
         self._log_buffer = []
         self._log_buffer_count = 0
 
-        # ponytail: I/O caching - query only every 10s instead of every cycle
-        self._last_io_query = 0.0
-        self._cached_dk = None
-        self._cached_nk = None
-
         if run_parity_check:
             self._startup_parity_check()
 
@@ -274,17 +269,12 @@ class InferenceEngine:
             
         # 10. Disk and Network rates
         now = time.monotonic()
-        dk  = psutil.disk_io_counters()
-        # ponytail: Cache I/O counters, query only every 10s (not every cycle)
-        if now_mono - self._last_io_query >= 10.0:
-            dk = psutil.disk_io_counters()
-            nk = psutil.net_io_counters()
-            self._last_io_query = now_mono
-            self._cached_dk = dk
-            self._cached_nk = nk
-        else:
-            dk = self._cached_dk
-            nk = self._cached_nk
+        # Read fresh every tick: the rate is a delta against dk_prev/nk_prev, which
+        # advance every tick. Caching the counters made the numerator (cached - cached)
+        # zero between refreshes, so disk_io/network_io collapsed to 0.0. These reads
+        # are cheap; there is nothing to save here.
+        dk = psutil.disk_io_counters()
+        nk = psutil.net_io_counters()
 
         disk_raw  = (dk.read_bytes + dk.write_bytes) if dk else 0
         disk_rate = ((disk_raw - dk_prev['val']) / max(now - dk_prev['time'], 1e-6)) if dk_prev else 0.0

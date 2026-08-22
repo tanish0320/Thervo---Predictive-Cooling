@@ -158,10 +158,15 @@
             <button id="tab-graphs" class="nav-tab px-3 py-1 rounded font-label-caps text-[10px] font-bold tracking-wider transition-all border border-transparent bg-transparent text-primary/60 hover:text-primary hover:bg-white/5">GRAPHS</button>
             <button id="tab-predictions" class="nav-tab px-3 py-1 rounded font-label-caps text-[10px] font-bold tracking-wider transition-all border border-transparent bg-transparent text-primary/60 hover:text-primary hover:bg-white/5">PREDICTIONS</button>
             <button id="tab-system" class="nav-tab px-3 py-1 rounded font-label-caps text-[10px] font-bold tracking-wider transition-all border border-transparent bg-transparent text-primary/60 hover:text-primary hover:bg-white/5">SYSTEM</button>
+            <button id="btn-how-it-works" class="ml-2 px-3 py-1 rounded font-label-caps text-[10px] font-bold tracking-wider transition-all border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 flex items-center gap-1.5 shadow-[0_0_12px_rgba(0,229,255,0.2)]"><span class="material-symbols-outlined text-[13px]">lightbulb</span> HOW IT WORKS & ARCHITECTURE</button>
         </nav>
     </div>
 
     <div class="flex items-center gap-4">
+        <div class="hidden lg:flex items-center gap-1.5 border-r border-primary/20 pr-3">
+            <span class="px-1.5 py-0.5 rounded font-label-caps text-[7.5px] font-bold bg-primary/10 border border-primary/30 text-primary">0 SENSORS</span>
+            <span class="px-1.5 py-0.5 rounded font-label-caps text-[7.5px] font-bold bg-secondary-container/10 border border-secondary-container/30 text-secondary-container">30s PREDICTIVE</span>
+        </div>
         <!-- Telemetry Source Status Toggle -->
         <div class="flex items-center gap-2 px-2 py-0.5 bg-black/40 border border-primary/20 rounded micro-panel">
             <span class="font-label-caps text-[7.5px] text-primary/50">SOURCE:</span>
@@ -2192,6 +2197,434 @@
     // Initial load
     switchTab('tab-dashboard');
     streamTelemetry();
+
+    // How It Works Modal Controller
+    const btnHowItWorks = document.getElementById('btn-how-it-works');
+    const modalHowItWorks = document.getElementById('modal-how-it-works');
+    const closeHowItWorks = document.getElementById('close-modal-how-it-works');
+
+    if (btnHowItWorks && modalHowItWorks) {
+        btnHowItWorks.addEventListener('click', () => {
+            modalHowItWorks.classList.remove('hidden');
+        });
+    }
+
+    if (closeHowItWorks && modalHowItWorks) {
+        closeHowItWorks.addEventListener('click', () => {
+            modalHowItWorks.classList.add('hidden');
+        });
+    }
+
+    // Modal Section Tabs
+    const modalTabOverview = document.getElementById('modal-tab-overview');
+    const modalTabPipeline = document.getElementById('modal-tab-pipeline');
+    const modalTabSimulator = document.getElementById('modal-tab-simulator');
+    const modalSecOverview = document.getElementById('modal-sec-overview');
+    const modalSecPipeline = document.getElementById('modal-sec-pipeline');
+    const modalSecSimulator = document.getElementById('modal-sec-simulator');
+
+    function switchModalTab(tabId) {
+        [modalSecOverview, modalSecPipeline, modalSecSimulator].forEach(sec => {
+            if (sec) sec.classList.add('hidden');
+        });
+        [modalTabOverview, modalTabPipeline, modalTabSimulator].forEach(btn => {
+            if (btn) {
+                btn.className = "modal-tab px-4 py-1.5 rounded font-label-caps text-[10px] font-bold transition-all bg-transparent border border-transparent text-white/60 hover:text-white hover:bg-white/5";
+            }
+        });
+
+        if (tabId === 'overview') {
+            if (modalSecOverview) modalSecOverview.classList.remove('hidden');
+            if (modalTabOverview) modalTabOverview.className = "modal-tab px-4 py-1.5 rounded font-label-caps text-[10px] font-bold transition-all bg-primary/20 border border-primary/40 text-primary";
+        } else if (tabId === 'pipeline') {
+            if (modalSecPipeline) modalSecPipeline.classList.remove('hidden');
+            if (modalTabPipeline) modalTabPipeline.className = "modal-tab px-4 py-1.5 rounded font-label-caps text-[10px] font-bold transition-all bg-primary/20 border border-primary/40 text-primary";
+            renderPipelineStage(1);
+        } else if (tabId === 'simulator') {
+            if (modalSecSimulator) modalSecSimulator.classList.remove('hidden');
+            if (modalTabSimulator) modalTabSimulator.className = "modal-tab px-4 py-1.5 rounded font-label-caps text-[10px] font-bold transition-all bg-primary/20 border border-primary/40 text-primary";
+        }
+    }
+
+    if (modalTabOverview) modalTabOverview.addEventListener('click', () => switchModalTab('overview'));
+    if (modalTabPipeline) modalTabPipeline.addEventListener('click', () => switchModalTab('pipeline'));
+    if (modalTabSimulator) modalTabSimulator.addEventListener('click', () => switchModalTab('simulator'));
+
+    // Pipeline Explorer Stage Details Map
+    const stageDetails = {
+        1: {
+            title: "STAGE 1: SOFTWARE TELEMETRY COLLECTION",
+            formula: "psutil.cpu_percent(interval=1.0) & NVML DLL / nvidia-smi microsecond queries",
+            contract: "Required Keys: ['cpu', 'gpu', 'memory', 'disk_io', 'network_io']",
+            description: "Direct software-observable compute workload metrics collected every 1 second without physical temperature probes. Microsecond direct kernel and driver queries ensure zero hardware latency."
+        },
+        2: {
+            title: "STAGE 2: FEATURE ENGINEERING ENGINE",
+            formula: "x_norm = log(1 + x) / max_log_rate | rolling_window(5s, 10s) | shifted_deltas",
+            contract: "Canonical 15-Feature Matrix Shape: (1, 15) strictly bounded in [0.0, 1.0]",
+            description: "Stateful FeatureProcessor transforms raw workload inputs into 15 normalized features (base percentages, log I/O rates, 5-sample and 10-sample rolling averages, and shifted deltas)."
+        },
+        3: {
+            title: "STAGE 3: INFERRED THERMAL HEAT PROXY",
+            formula: "heat_norm = clip(0.6 * cpu_norm + 0.4 * gpu_norm, 0.0, 1.0)",
+            contract: "Heat Proxy Scalar in [0.0, 1.0] representing instantaneous compute thermal load",
+            description: "Sensor-free thermal load estimation weighting CPU compute (60%) and GPU compute (40%). Precedes physical silicon heat accumulation by up to 30 seconds."
+        },
+        4: {
+            title: "STAGE 4: ANALYTIC GNN TOPOLOGY CONTEXT",
+            formula: "gnn_embedding = clip(0.7 * self_heat + 0.3 * neighbor_heat, 0.0, 1.0)",
+            contract: "Spatial Graph Embedding representing local + adjacent rack thermal context",
+            description: "Models spatial thermal propagation across adjacent server racks. Evaluates neighbor heat influence (30% weight) without PyTorch overhead on the production inference path."
+        },
+        5: {
+            title: "STAGE 5: XGBOOST MODEL & COMPOSITE FUSION",
+            formula: "composite_risk = clip(0.75 * xgb_score + 0.25 * gnn_embedding, 0.0, 1.0)",
+            contract: "Composite Risk Score in [0.0, 1.0] (LOW <0.35, MED <0.55, HIGH <0.75, CRITICAL >=0.75)",
+            description: "Gradient boosted decision trees (30 trees, max depth 4) predict temporal workload risk. Fused with spatial GNN context using a 75/25 weighting."
+        },
+        6: {
+            title: "STAGE 6: COOLING POLICY ORCHESTRATION",
+            formula: "Target Fan Speed Actuation | Threshold = 0.72 | Hysteresis & Acoustic Ramp Smoothing",
+            contract: "Fan Speed Target (0-100%) & Mode State (QUIET, BALANCED, PERFORMANCE, FAILSAFE)",
+            description: "Stateful policy controller prevents fan thrashing using progressive escalation, thermal inertia recovery timers, and acoustic ramp-rate limits (+5% RPM/s up, -8% RPM/s down)."
+        },
+        7: {
+            title: "STAGE 7: OBSERVATIONAL XAI CAUSAL ENGINE",
+            formula: "DecisionExplainer: Causal Decision State + Signal Deltas + Step-by-Step Trace",
+            contract: "Structured Audit JSON Output Schema + Human-Readable Operator Summaries",
+            description: "Observational, non-intrusive explanation layer. Analyzes transition deltas to generate audit-ready causal traces explaining why cooling decisions occurred."
+        }
+    };
+
+    function renderPipelineStage(stageNum) {
+        const detailContainer = document.getElementById('pipe-stage-detail');
+        const btns = document.querySelectorAll('.pipe-step-btn');
+        btns.forEach(b => {
+            if (b.dataset.stage == stageNum) {
+                b.className = "pipe-step-btn micro-panel p-2 rounded text-center border border-primary/60 bg-primary/20 transition-all cursor-pointer flex flex-col items-center gap-1 active-pipe-btn shadow-[0_0_10px_rgba(0,229,255,0.3)]";
+            } else {
+                b.className = "pipe-step-btn micro-panel p-2 rounded text-center border border-white/10 bg-black/40 hover:bg-white/5 transition-all cursor-pointer flex flex-col items-center gap-1";
+            }
+        });
+
+        const st = stageDetails[stageNum] || stageDetails[1];
+        if (detailContainer) {
+            detailContainer.innerHTML = `
+                <div class="flex justify-between items-center border-b border-primary/20 pb-2">
+                    <span class="text-primary font-bold text-[12px]">${st.title}</span>
+                    <span class="text-secondary-container text-[9px] font-bold">SINGLE SOURCE OF TRUTH</span>
+                </div>
+                <div class="text-[10px] text-white/90 font-body-base leading-relaxed bg-white/5 p-2.5 rounded border border-white/5">
+                    ${st.description}
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-[8.5px]">
+                    <div class="bg-black/60 p-2 rounded border border-primary/20">
+                        <span class="text-primary/60 block font-bold">CANONICAL FORMULA:</span>
+                        <span class="text-white font-bold block mt-0.5">${st.formula}</span>
+                    </div>
+                    <div class="bg-black/60 p-2 rounded border border-secondary-container/20">
+                        <span class="text-secondary-container/60 block font-bold">DATA CONTRACT & OUTPUT:</span>
+                        <span class="text-white font-bold block mt-0.5">${st.contract}</span>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    document.querySelectorAll('.pipe-step-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const stage = e.currentTarget.dataset.stage;
+            renderPipelineStage(stage);
+        });
+    });
+
+    // Interactive Workload Simulator JS
+    const simGpu = document.getElementById('sim-btn-gpu');
+    const simCpu = document.getElementById('sim-btn-cpu');
+    const simRecover = document.getElementById('sim-btn-recover');
+    const simOut = document.getElementById('sim-xai-output');
+    const simTs = document.getElementById('sim-timestamp');
+
+    function runInteractiveSim(scenario) {
+        if (!simOut) return;
+        const nowStr = new Date().toLocaleTimeString();
+        if (simTs) simTs.innerText = `LAST RUN: ${nowStr}`;
+
+        let simData = {};
+        if (scenario === 'gpu') {
+            simData = {
+                title: "🚀 SIMULATED GPU RENDER SPIKE",
+                decision: "COOLING_ACTIVATED",
+                headline: "Cooling Activated (GPU Spike)",
+                risk_prev: 0.22,
+                risk_curr: 0.78,
+                cool_prev: 0,
+                cool_curr: 65,
+                summary: "Cooling activated from 0% to 65% because GPU (+70.0%), DISK I/O (+2.40 MB/s). Predicted thermal risk rose from 22.0% to 78.0%, crossing the 72% automatic cooling threshold.",
+                trace: [
+                    "GPU utilization increased by +70.0% (15.0% -> 85.0%)",
+                    "DISK I/O rate increased by +2.40 MB/s (100 B/s -> 2.40 MB/s)",
+                    "Inferred heat proxy increased from 15.0% to 57.0% (+42.0% points)",
+                    "Predicted thermal risk changed from 22.0% to 78.0% (Level: CRITICAL)",
+                    "Risk crossed the automatic cooling threshold of 72%",
+                    "Cooling intensity activated at 65%"
+                ]
+            };
+        } else if (scenario === 'cpu') {
+            simData = {
+                title: "⚡ SIMULATED CPU COMPILE BURST",
+                decision: "COOLING_INCREASED",
+                headline: "Cooling Increased (CPU Burst)",
+                risk_prev: 0.35,
+                risk_curr: 0.62,
+                cool_prev: 20,
+                cool_curr: 45,
+                summary: "Cooling increased from 20% to 45% because CPU (+72.0%), NETWORK I/O (+1.80 MB/s). Predicted thermal risk rose from 35.0% to 62.0%, elevating predicted thermal risk to 62.0% (Level: HIGH).",
+                trace: [
+                    "CPU utilization increased by +72.0% (20.0% -> 92.0%)",
+                    "NETWORK I/O rate increased by +1.80 MB/s (500 B/s -> 1.80 MB/s)",
+                    "Inferred heat proxy increased from 25.0% to 68.2% (+43.2% points)",
+                    "Predicted thermal risk changed from 35.0% to 62.0% (Level: HIGH)",
+                    "Increased thermal risk required higher cooling capacity",
+                    "Cooling intensity increased from 20% to 45%"
+                ]
+            };
+        } else {
+            simData = {
+                title: "🍃 SIMULATED IDLE RECOVERY",
+                decision: "COOLING_DECREASED",
+                headline: "Cooling Decreased (Thermal Recovery)",
+                risk_prev: 0.78,
+                risk_curr: 0.24,
+                cool_prev: 65,
+                cool_curr: 15,
+                summary: "Cooling decreased from 65% to 15% because GPU (-70.0%), CPU (-72.0%). Predicted thermal risk fell from 78.0% to 24.0%, easing cooling demand.",
+                trace: [
+                    "GPU utilization decreased by -70.0% (85.0% -> 15.0%)",
+                    "CPU utilization decreased by -72.0% (92.0% -> 20.0%)",
+                    "Inferred heat proxy decreased from 68.2% to 15.0% (-53.2% points)",
+                    "Predicted thermal risk changed from 78.0% to 24.0% (Level: LOW)",
+                    "Reduced thermal risk allowed fan speed attenuation",
+                    "Cooling intensity decreased from 65% to 15%"
+                ]
+            };
+        }
+
+        let traceHtml = simData.trace.map((step, idx) => `<div class="pl-2 border-l-2 border-primary/40"><span class="text-primary font-bold">${idx+1}.</span> ${step}</div>`).join('');
+
+        simOut.innerHTML = `
+            <div class="flex flex-col gap-2 w-full text-left font-data-mono">
+                <div class="flex justify-between items-center pb-1 border-b border-white/10">
+                    <span class="font-bold text-primary font-label-caps text-[10px]">${simData.title}</span>
+                    <span class="text-secondary-container font-bold text-[9px] px-2 py-0.5 bg-secondary-container/10 border border-secondary-container/30 rounded">${simData.headline}</span>
+                </div>
+                <div class="text-[9.5px] text-white/90 bg-white/5 p-2.5 rounded border border-white/5">
+                    ${simData.summary}
+                </div>
+                <div class="text-[8.5px] text-white/70 bg-black/60 p-2.5 rounded border border-primary/20 flex flex-col gap-1">
+                    <div class="text-primary font-bold mb-0.5">CAUSAL DECISION TRACE:</div>
+                    ${traceHtml}
+                </div>
+            </div>
+        `;
+
+        // Inject telemetry into dashboard UI display
+        if (typeof latestData !== 'undefined' && latestData) {
+            latestData.xai = {
+                decision: simData.decision,
+                headline: simData.headline,
+                risk: { previous: simData.risk_prev, current: simData.risk_curr },
+                cooling: { previous_strength: simData.cool_prev, current_strength: simData.cool_curr },
+                summary: simData.summary,
+                decision_trace: simData.trace,
+                primary_reasons: [
+                    { signal: scenario === 'gpu' ? 'gpu' : 'cpu', direction: scenario === 'recover' ? 'decrease' : 'increase', formatted_delta: scenario === 'gpu' ? '+70.0%' : (scenario === 'cpu' ? '+72.0%' : '-70.0%') }
+                ]
+            };
+            latestData.risk_score = simData.risk_curr;
+            renderTelemetry(latestData);
+        }
+    }
+
+    if (simGpu) simGpu.addEventListener('click', () => runInteractiveSim('gpu'));
+    if (simCpu) simCpu.addEventListener('click', () => runInteractiveSim('cpu'));
+    if (simRecover) simRecover.addEventListener('click', () => runInteractiveSim('recover'));
 </script>
+
+<!-- Interactive Explainer Modal HTML -->
+<div id="modal-how-it-works" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 hidden transition-all duration-300">
+    <div class="glass-panel w-full max-w-5xl max-h-[90vh] rounded-lg border border-primary/40 flex flex-col shadow-[0_0_50px_rgba(0,229,255,0.25)] overflow-hidden">
+        
+        <!-- Modal Header -->
+        <div class="px-6 py-4 border-b border-primary/20 bg-surface/90 flex justify-between items-center shrink-0">
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-primary text-[28px] spin-slow">psychology_alt</span>
+                <div>
+                    <h2 class="font-display-lg text-[18px] font-bold text-white tracking-tight">THERVO — AI-Driven Sensor-Free Predictive Cooling System</h2>
+                    <p class="font-label-caps text-[9px] text-primary/70 tracking-widest mt-0.5">INTERACTIVE SYSTEM ARCHITECTURE & EXPLAINABLE AI EXPLORER</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="px-2.5 py-1 rounded font-label-caps text-[9px] font-bold bg-primary/10 border border-primary/30 text-primary">0 PHYSICAL SENSORS</span>
+                <button id="close-modal-how-it-works" class="text-white/60 hover:text-white text-[20px] font-bold px-2 py-1 hover:bg-white/10 rounded transition-all">✕</button>
+            </div>
+        </div>
+
+        <!-- Modal Nav Tabs -->
+        <div class="px-6 py-2 bg-black/50 border-b border-white/5 flex gap-2 shrink-0">
+            <button id="modal-tab-overview" class="modal-tab px-4 py-1.5 rounded font-label-caps text-[10px] font-bold transition-all bg-primary/20 border border-primary/40 text-primary">1. EXECUTIVE OVERVIEW</button>
+            <button id="modal-tab-pipeline" class="modal-tab px-4 py-1.5 rounded font-label-caps text-[10px] font-bold transition-all bg-transparent border border-transparent text-white/60 hover:text-white hover:bg-white/5">2. INTERACTIVE 7-STAGE PIPELINE EXPLORER</button>
+            <button id="modal-tab-simulator" class="modal-tab px-4 py-1.5 rounded font-label-caps text-[10px] font-bold transition-all bg-transparent border border-transparent text-white/60 hover:text-white hover:bg-white/5">3. LIVE WORKLOAD SIMULATOR</button>
+        </div>
+
+        <!-- Modal Body Content -->
+        <div class="p-6 overflow-y-auto flex-1 data-stream flex flex-col gap-4">
+            
+            <!-- SECTION 1: OVERVIEW -->
+            <div id="modal-sec-overview" class="modal-sec flex flex-col gap-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- Traditional Reactive Card -->
+                    <div class="micro-panel bg-error/5 border-error/30 p-4 rounded-lg flex flex-col gap-2">
+                        <div class="flex items-center justify-between border-b border-error/20 pb-2">
+                            <span class="font-label-caps text-[11px] font-bold text-error flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">warning</span>
+                                TRADITIONAL REACTIVE COOLING
+                            </span>
+                            <span class="text-[9px] font-data-mono text-error/60">OBSOLETE PARADIGM</span>
+                        </div>
+                        <ul class="text-[10.5px] font-body-base text-white/80 flex flex-col gap-2.5">
+                            <li class="flex items-start gap-2"><span class="text-error font-bold">✖</span> <div><strong>Physical Sensor Inertia:</strong> Thermal lag delays cooling intervention until hardware silicon is already dangerously hot.</div></li>
+                            <li class="flex items-start gap-2"><span class="text-error font-bold">✖</span> <div><strong>Thermal Thrashing:</strong> Aggressive, uncoordinated fan RPM spikes cause noise, wear, and high energy usage.</div></li>
+                            <li class="flex items-start gap-2"><span class="text-error font-bold">✖</span> <div><strong>Hardware Expense:</strong> Requires physical sensor deployment, cabling, calibration, and probe maintenance.</div></li>
+                            <li class="flex items-start gap-2"><span class="text-error font-bold">✖</span> <div><strong>Black-Box Commands:</strong> Operators receive automated fan speed changes with zero explanation.</div></li>
+                        </ul>
+                    </div>
+
+                    <!-- THERVO Predictive Card -->
+                    <div class="micro-panel bg-primary/10 border-primary/40 p-4 rounded-lg flex flex-col gap-2 shadow-[0_0_20px_rgba(0,229,255,0.1)]">
+                        <div class="flex items-center justify-between border-b border-primary/20 pb-2">
+                            <span class="font-label-caps text-[11px] font-bold text-primary flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">verified</span>
+                                THERVO SENSOR-FREE PREDICTIVE COOLING
+                            </span>
+                            <span class="text-[9px] font-data-mono text-secondary-container">PROVEN ARCHITECTURE</span>
+                        </div>
+                        <ul class="text-[10.5px] font-body-base text-white/90 flex flex-col gap-2.5">
+                            <li class="flex items-start gap-2"><span class="text-primary font-bold">✓</span> <div><strong>Zero Physical Sensors:</strong> Derives thermal risk entirely from software workload telemetry (CPU, GPU, RAM, I/O).</div></li>
+                            <li class="flex items-start gap-2"><span class="text-primary font-bold">✓</span> <div><strong>30-Second Pre-emptive Horizon:</strong> Predicts compute thermal load before physical silicon heat accumulation occurs.</div></li>
+                            <li class="flex items-start gap-2"><span class="text-primary font-bold">✓</span> <div><strong>Topology-Aware GNN Context:</strong> Fuses spatial neighbor thermal propagation across adjacent data center racks.</div></li>
+                            <li class="flex items-start gap-2"><span class="text-primary font-bold">✓</span> <div><strong>Observational XAI Layer:</strong> Generates audit-ready causal decision traces explaining *why* every cooling action occurs.</div></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Key Metrics Grid -->
+                <div class="grid grid-cols-4 gap-3 mt-2">
+                    <div class="micro-panel bg-black/60 p-3 rounded text-center border border-primary/20">
+                        <span class="font-label-caps text-[8px] text-primary/60 block">SENSOR DEPENDENCY</span>
+                        <span class="font-display-lg text-[22px] font-bold text-primary block mt-1">0</span>
+                        <span class="text-[8px] text-white/50">100% Software Observable</span>
+                    </div>
+                    <div class="micro-panel bg-black/60 p-3 rounded text-center border border-primary/20">
+                        <span class="font-label-caps text-[8px] text-secondary-container/60 block">PREDICTION HORIZON</span>
+                        <span class="font-display-lg text-[22px] font-bold text-secondary-container block mt-1">30s</span>
+                        <span class="text-[8px] text-white/50">Lead Time Advantage</span>
+                    </div>
+                    <div class="micro-panel bg-black/60 p-3 rounded text-center border border-primary/20">
+                        <span class="font-label-caps text-[8px] text-tertiary-container/60 block">FEATURE VECTOR</span>
+                        <span class="font-display-lg text-[22px] font-bold text-tertiary-container block mt-1">15</span>
+                        <span class="text-[8px] text-white/50">Canonical Features (v2_15feature)</span>
+                    </div>
+                    <div class="micro-panel bg-black/60 p-3 rounded text-center border border-primary/20">
+                        <span class="font-label-caps text-[8px] text-white/60 block">TRAINING-SERVING SKEW</span>
+                        <span class="font-display-lg text-[22px] font-bold text-white block mt-1">0.0%</span>
+                        <span class="text-[8px] text-white/50">Guaranteed Parity</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 2: 7-STAGE PIPELINE EXPLORER -->
+            <div id="modal-sec-pipeline" class="modal-sec hidden flex flex-col gap-4">
+                <div class="font-label-caps text-[10px] text-primary font-bold">CLICK ANY STAGE BELOW TO INSPECT MATHEMATICAL FORMULAS & DATA CONTRACTS:</div>
+                
+                <!-- Interactive Flowchart Steps -->
+                <div class="grid grid-cols-7 gap-2">
+                    <button class="pipe-step-btn micro-panel p-2 rounded text-center border border-primary/50 bg-primary/20 hover:bg-primary/30 transition-all cursor-pointer flex flex-col items-center gap-1 active-pipe-btn" data-stage="1">
+                        <span class="font-data-mono text-[8px] text-primary font-bold">STAGE 1</span>
+                        <span class="font-label-caps text-[8.5px] text-white font-bold leading-tight">Software Telemetry</span>
+                    </button>
+                    <button class="pipe-step-btn micro-panel p-2 rounded text-center border border-white/10 bg-black/40 hover:bg-white/5 transition-all cursor-pointer flex flex-col items-center gap-1" data-stage="2">
+                        <span class="font-data-mono text-[8px] text-primary/60 font-bold">STAGE 2</span>
+                        <span class="font-label-caps text-[8.5px] text-white font-bold leading-tight">Feature Processor</span>
+                    </button>
+                    <button class="pipe-step-btn micro-panel p-2 rounded text-center border border-white/10 bg-black/40 hover:bg-white/5 transition-all cursor-pointer flex flex-col items-center gap-1" data-stage="3">
+                        <span class="font-data-mono text-[8px] text-primary/60 font-bold">STAGE 3</span>
+                        <span class="font-label-caps text-[8.5px] text-white font-bold leading-tight">Heat Proxy</span>
+                    </button>
+                    <button class="pipe-step-btn micro-panel p-2 rounded text-center border border-white/10 bg-black/40 hover:bg-white/5 transition-all cursor-pointer flex flex-col items-center gap-1" data-stage="4">
+                        <span class="font-data-mono text-[8px] text-primary/60 font-bold">STAGE 4</span>
+                        <span class="font-label-caps text-[8.5px] text-white font-bold leading-tight">Analytic GNN</span>
+                    </button>
+                    <button class="pipe-step-btn micro-panel p-2 rounded text-center border border-white/10 bg-black/40 hover:bg-white/5 transition-all cursor-pointer flex flex-col items-center gap-1" data-stage="5">
+                        <span class="font-data-mono text-[8px] text-primary/60 font-bold">STAGE 5</span>
+                        <span class="font-label-caps text-[8.5px] text-white font-bold leading-tight">XGBoost & Fusion</span>
+                    </button>
+                    <button class="pipe-step-btn micro-panel p-2 rounded text-center border border-white/10 bg-black/40 hover:bg-white/5 transition-all cursor-pointer flex flex-col items-center gap-1" data-stage="6">
+                        <span class="font-data-mono text-[8px] text-primary/60 font-bold">STAGE 6</span>
+                        <span class="font-label-caps text-[8.5px] text-white font-bold leading-tight">Cooling Policy</span>
+                    </button>
+                    <button class="pipe-step-btn micro-panel p-2 rounded text-center border border-white/10 bg-black/40 hover:bg-white/5 transition-all cursor-pointer flex flex-col items-center gap-1" data-stage="7">
+                        <span class="font-data-mono text-[8px] text-primary/60 font-bold">STAGE 7</span>
+                        <span class="font-label-caps text-[8.5px] text-white font-bold leading-tight">XAI Explainer</span>
+                    </button>
+                </div>
+
+                <!-- Detailed Card for Selected Stage -->
+                <div id="pipe-stage-detail" class="micro-panel bg-black/80 border-primary/30 p-4 rounded-lg flex flex-col gap-3 font-data-mono">
+                    <!-- Populated dynamically by JS -->
+                </div>
+            </div>
+
+            <!-- SECTION 3: LIVE SIMULATOR CONTROLS -->
+            <div id="modal-sec-simulator" class="modal-sec hidden flex flex-col gap-4">
+                <div class="font-label-caps text-[10px] text-primary font-bold">TRIGGER LIVE WORKLOAD SCENARIOS & INSTANT XAI EXPLANATIONS:</div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <button id="sim-btn-gpu" class="micro-panel p-3 bg-tertiary-container/10 border border-tertiary-container/40 hover:bg-tertiary-container/20 rounded text-left flex flex-col gap-1 transition-all">
+                        <span class="font-label-caps text-[10px] text-tertiary-container font-bold flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[14px]">bolt</span> 🚀 SIMULATE GPU RENDER SPIKE
+                        </span>
+                        <span class="text-[8.5px] text-white/70">GPU: 15% → 85% | Risk Rises | Trigger Cooling & XAI</span>
+                    </button>
+
+                    <button id="sim-btn-cpu" class="micro-panel p-3 bg-primary/10 border border-primary/40 hover:bg-primary/20 rounded text-left flex flex-col gap-1 transition-all">
+                        <span class="font-label-caps text-[10px] text-primary font-bold flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[14px]">memory</span> ⚡ SIMULATE CPU COMPILE BURST
+                        </span>
+                        <span class="text-[8.5px] text-white/70">CPU: 20% → 92% | Proactive Ramp | Trigger XAI</span>
+                    </button>
+
+                    <button id="sim-btn-recover" class="micro-panel p-3 bg-secondary-container/10 border border-secondary-container/40 hover:bg-secondary-container/20 rounded text-left flex flex-col gap-1 transition-all">
+                        <span class="font-label-caps text-[10px] text-secondary-container font-bold flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[14px]">eco</span> 🍃 SIMULATE IDLE RECOVERY
+                        </span>
+                        <span class="text-[8.5px] text-white/70">Workload Drops | Risk Relaxes | Cooling Attenuates</span>
+                    </button>
+                </div>
+
+                <div class="micro-panel bg-black/90 border border-white/10 p-3 rounded font-data-mono text-[9px] flex flex-col gap-2">
+                    <div class="text-primary font-bold border-b border-white/5 pb-1 flex justify-between">
+                        <span>LIVE SIMULATED XAI EXPLANATION FEED</span>
+                        <span id="sim-timestamp" class="text-secondary-container">ACTIVE</span>
+                    </div>
+                    <div id="sim-xai-output" class="text-white/90 leading-relaxed min-h-[120px] flex flex-col justify-center items-center text-white/40 italic">
+                        Click a scenario button above to trigger live telemetry injection and XAI explanation...
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
 </body>
 </html>

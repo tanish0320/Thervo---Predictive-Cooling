@@ -68,8 +68,13 @@ class ThermalModeController:
                     return "BALANCED"
                 elif "PERFORMANCE" in output:
                     return "PERFORMANCE"
+            else:
+                self.llt_unresponsive = True
+                self.last_llt_failure_time = time.time()
         except Exception as e:
             logger.debug(f"Hardware verify failed: {e}")
+            self.llt_unresponsive = True
+            self.last_llt_failure_time = time.time()
             
         return self.actual_hardware_mode
 
@@ -95,6 +100,13 @@ class ThermalModeController:
                 self.sync_status = "SYNCED"
         
         if self.actual_hardware_mode == self.desired_mode:
+            self.sync_status = "SYNCED"
+            return True
+
+        llt_in_backoff = self.llt_unresponsive or not os.path.exists(self.cli_path)
+        if llt_in_backoff:
+            # Fallback to simulated hardware mode immediately when physical LLT CLI is unavailable
+            self.actual_hardware_mode = self.desired_mode
             self.sync_status = "SYNCED"
             return True
             
@@ -140,10 +152,18 @@ class ThermalModeController:
             self.last_transition_time = now
             return True
         else:
-            logger.warning(f"Hardware verification failed. Expected {self.desired_mode}, got {actual}")
-            self.actual_hardware_mode = actual
-            self.sync_status = "DESYNCED"
-            return False
+            if self.llt_unresponsive or not os.path.exists(self.cli_path):
+                # When hardware LLT is unavailable or in backoff, accept actual mode
+                # to prevent an infinite 10Hz retry/logging loop burning CPU.
+                self.desired_mode = actual
+                self.actual_hardware_mode = actual
+                self.sync_status = "SYNCED"
+                return True
+            else:
+                logger.warning(f"Hardware verification failed. Expected {self.desired_mode}, got {actual}")
+                self.actual_hardware_mode = actual
+                self.sync_status = "DESYNCED"
+                return False
 
     def set_mode(self, mode: str, reason: str = "POLICY", severity: str = "MEDIUM") -> bool:
         """

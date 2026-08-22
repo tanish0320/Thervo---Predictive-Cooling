@@ -92,24 +92,8 @@
             box-shadow: inset 0 0 12px rgba(0,0,0,0.4);
         }
 
-        /* Scan line animation overlay */
-        .scan-line {
-            position: absolute;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(0, 229, 255, 0.3), transparent);
-            box-shadow: 0 0 8px rgba(0, 229, 255, 0.4);
-            animation: scan-down 6s linear infinite;
-            z-index: 10;
-            pointer-events: none;
-        }
-        @keyframes scan-down {
-            0% { top: 0; opacity: 0; }
-            5% { opacity: 1; }
-            95% { opacity: 1; }
-            100% { top: 100%; opacity: 0; }
-        }
+        /* Scan line overlay (disabled) */
+        .scan-line { display: none !important; }
 
         .data-stream::-webkit-scrollbar { width: 4px; }
         .data-stream::-webkit-scrollbar-track { background: rgba(255,255,255,0.01); }
@@ -154,7 +138,6 @@
     </style>
 </head>
 <body class="text-on-surface font-body-base text-body-base overflow-hidden h-screen w-screen flex flex-col">
-<div class="scan-line"></div>
 
 <!-- TopNavBar -->
 <header id="main-header" class="w-full h-12 bg-surface/90 backdrop-blur-2xl border-b border-primary/20 flex items-center justify-between px-4 z-40 relative shadow-[0_4px_30px_rgba(0,0,0,0.5)] transition-colors duration-500">
@@ -427,8 +410,8 @@
                 <!-- AI Metrics Grid -->
                 <div class="grid grid-cols-4 gap-3 my-2">
                     <div class="micro-panel bg-black/40 p-2 border-primary/10 flex flex-col">
-                        <span class="font-label-caps text-[7px] text-primary/50">AI CONFIDENCE</span>
-                        <span id="ai-confidence-val" class="font-data-mono text-[14px] font-bold text-white mt-1">94%</span>
+                        <span class="font-label-caps text-[7px] text-primary/50">DATA QUALITY</span>
+                        <span id="ai-confidence-val" class="font-data-mono text-[14px] font-bold text-secondary-container mt-1">VALID</span>
                     </div>
                     <div class="micro-panel bg-black/40 p-2 border-primary/10 flex flex-col">
                         <span class="font-label-caps text-[7px] text-primary/50">SPIKE ETA</span>
@@ -445,26 +428,18 @@
                 </div>
 
                 <!-- Explainable AI Panel -->
-                <div class="micro-panel bg-black/70 border-primary/10 p-3 rounded flex flex-col gap-2 flex-1 mb-2">
-                    <div class="flex justify-between items-center border-b border-white/5 pb-1">
+                <div class="micro-panel bg-black/70 border-primary/10 p-3 rounded flex flex-col gap-2 flex-1 mb-2 overflow-y-auto max-h-[300px]">
+                    <div class="flex justify-between items-center border-b border-white/5 pb-1 shrink-0">
                         <span class="font-label-caps text-[8px] text-primary font-bold flex items-center gap-1">
-                            <span class="material-symbols-outlined text-[12px]">help_center</span>
-                            EXPLAINABLE AI REASONING
+                            <span class="material-symbols-outlined text-[12px]">psychology_alt</span>
+                            AI DECISION EXPLANATION
                         </span>
-                        <span class="font-data-mono text-[7px] text-primary/40">SHAP FEATURE ATTRIBUTION</span>
+                        <span class="font-data-mono text-[7px] text-primary/40">CAUSAL TRACE ENGINE</span>
                     </div>
                     <div class="text-[9px] font-data-mono text-primary/70 flex flex-col gap-1.5" id="shap-reasons">
                         <div class="flex justify-between items-center">
-                            <span>GPU thermal ramp detected (dH/dt)</span>
-                            <span class="text-error font-bold">+28% Contribution</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span>VRAM cache hit latency propagation</span>
-                            <span class="text-tertiary-container font-bold">+18% Contribution</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span>Composite inference pre-stabilization trigger</span>
-                            <span class="text-white font-bold">Intervention Required</span>
+                            <span>Observational XAI Engine Initialized</span>
+                            <span class="text-secondary-container font-bold">READY</span>
                         </div>
                     </div>
                 </div>
@@ -1286,30 +1261,61 @@
         }
 
         // Explainable AI Reasoning attributions
-        const explainBox = document.getElementById('ai-explain-reasoning');
         const shapReasons = document.getElementById('shap-reasons');
-        if (explainBox && shapReasons) {
-            const diag = latestData.diagnostics || {};
-            const e_conf = diag.escalation_confidence || 0;
-            const e_reason = diag.escalation_reason || "NONE";
-            const intent = diag.predictive_intent_class || "NOMINAL";
-            const semantic_status = diag.semantic_status || "NOMINAL THERMAL STATE";
-            
-            let reasonsHtml = `
-                <div class="flex justify-between items-center text-primary">
-                    <span class="font-bold uppercase">STATUS</span>
-                    <span class="font-bold">${semantic_status}</span>
-                </div>
-                <div class="flex justify-between items-center text-secondary-container">
-                    <span>Active Fingerprint</span>
-                    <span class="font-bold">${diag.workload_fingerprint ? diag.workload_fingerprint.replace(/_/g, ' ') : 'UNKNOWN'}</span>
-                </div>
-                <div class="flex justify-between items-center text-white">
-                    <span>Prediction Confidence</span>
-                    <span>${Math.round(e_conf * 100)}%</span>
-                </div>
-            `;
-            shapReasons.innerHTML = reasonsHtml;
+        if (shapReasons) {
+            const xai = latestData.xai || (latestData.diagnostics ? latestData.diagnostics.xai : null);
+            if (xai) {
+                let badgeClr = "text-primary border-primary/30 bg-primary/10";
+                if (xai.decision.includes("ACTIVATED") || xai.decision.includes("INCREASED")) {
+                    badgeClr = "text-tertiary-container border-tertiary-container/40 bg-tertiary-container/10";
+                } else if (xai.decision.includes("CRITICAL") || xai.decision.includes("FAILSAFE")) {
+                    badgeClr = "text-error border-error/40 bg-error/10";
+                } else if (xai.decision.includes("DECREASED") || xai.decision.includes("RELEASED")) {
+                    badgeClr = "text-secondary-container border-secondary-container/40 bg-secondary-container/10";
+                }
+
+                let reasonsHtml = `
+                    <div class="flex justify-between items-center pb-1.5 border-b border-white/10">
+                        <span class="font-bold font-label-caps text-[9px] px-2 py-0.5 rounded border ${badgeClr}">${xai.headline || xai.decision}</span>
+                        <span class="text-white/70 font-data-mono text-[8px]">Risk: ${(xai.risk.previous*100).toFixed(0)}% → ${(xai.risk.current*100).toFixed(0)}%</span>
+                    </div>
+                    <div class="text-[8.5px] text-white/90 font-body-base leading-relaxed bg-white/5 p-2 rounded border border-white/5 my-1">
+                        ${xai.summary}
+                    </div>
+                `;
+
+                if (xai.primary_reasons && xai.primary_reasons.length > 0) {
+                    reasonsHtml += `<div class="font-label-caps text-[7.5px] text-primary/70 mt-1 uppercase font-bold">Top Workload Contributors</div>`;
+                    xai.primary_reasons.forEach(r => {
+                        const arrow = r.direction === 'increase' ? '↑' : (r.direction === 'decrease' ? '↓' : '→');
+                        const color = r.direction === 'increase' ? 'text-tertiary-container' : 'text-secondary-container';
+                        const fmtDelta = r.formatted_delta || (r.delta >= 0 ? '+' + r.delta.toFixed(1) + '%' : r.delta.toFixed(1) + '%');
+                        const sigLabel = r.signal.replace('_io', ' I/O').toUpperCase();
+                        reasonsHtml += `
+                            <div class="flex justify-between items-center text-[8px] py-0.5 border-b border-white/5">
+                                <span class="text-white/80 uppercase font-bold">${sigLabel}</span>
+                                <span class="${color} font-bold font-data-mono">${fmtDelta} ${arrow}</span>
+                            </div>
+                        `;
+                    });
+                }
+
+                if (xai.decision_trace && xai.decision_trace.length > 0) {
+                    reasonsHtml += `
+                        <details class="mt-1">
+                            <summary class="cursor-pointer font-label-caps text-[7.5px] text-primary/70 hover:text-primary transition-colors py-0.5">
+                                ▶ View Step-by-Step Decision Trace (${xai.decision_trace.length} steps)
+                            </summary>
+                            <div class="mt-1 flex flex-col gap-1 text-[7.5px] font-data-mono text-white/70 bg-black/60 p-2 rounded border border-primary/20">
+                    `;
+                    xai.decision_trace.forEach((step, idx) => {
+                        reasonsHtml += `<div class="pl-1.5 border-l-2 border-primary/40"><span class="text-primary font-bold">${idx+1}.</span> ${step}</div>`;
+                    });
+                    reasonsHtml += `</div></details>`;
+                }
+
+                shapReasons.innerHTML = reasonsHtml;
+            }
         }
 
         // Predicted peaks comparison

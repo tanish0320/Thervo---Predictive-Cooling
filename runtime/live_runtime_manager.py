@@ -257,6 +257,17 @@ class LiveRuntimeManager:
             
             fan_pct, policy_state, stab_active, diagnostics = self.cooling_policy.update(risk_score, telemetry)
             
+            # Generate Observational XAI Decision Explanation
+            gnn_val = gnn_emb if self.mode_live else (risk_score * 0.8)
+            xai_explanation = self.inference_engine.explain(
+                raw_data=telemetry,
+                risk_score=risk_score,
+                cooling_strength=fan_pct,
+                gnn_emb=gnn_val,
+                is_manual_override=getattr(self, "manual_override_active", False)
+            )
+            diagnostics["xai"] = xai_explanation
+
             # Override if health is FAILSAFE
             if health_status["status"] == "FAILSAFE":
                 self.cooling_policy.hardware_controller.set_mode("PERFORMANCE", reason="HEALTH_FAILSAFE")
@@ -267,23 +278,25 @@ class LiveRuntimeManager:
             # Handle event triggers on mode changes
             if thermal_mode != self.last_thermal_mode:
                 if self.last_thermal_mode is not None:
+                    # Include XAI summary in event log
+                    xai_summary = xai_explanation.get("summary", "")
                     if thermal_mode == "FAILSAFE":
-                        self._add_event("Failsafe Cooling Activated", source="FAILSAFE", category="CRITICAL")
+                        self._add_event(f"Failsafe Cooling Activated — {xai_summary}", source="FAILSAFE", category="CRITICAL")
                         self.broadcaster.emit_failsafe_trigger("Emergency threshold or health failure")
                     elif thermal_mode == "PERFORMANCE":
-                        self._add_event("Performance Mode Activated", category="ACTION")
+                        self._add_event(f"Performance Mode Activated — {xai_summary}", category="ACTION")
                         self._add_event("Thermal Policy Escalated", category="WARN")
                         self._add_event("Predictive Stabilization Triggered", category="ACTION")
                         self.broadcaster.emit_cooling_intervention("Escalated to Performance Mode")
                         self.broadcaster.emit_predictive_stabilization(risk_score, int(target_rpm))
                     elif thermal_mode == "BALANCED":
                         if self.last_thermal_mode == "QUIET":
-                            self._add_event("Thermal Policy Escalated", category="WARN")
+                            self._add_event(f"Thermal Policy Escalated — {xai_summary}", category="WARN")
                         else:
-                            self._add_event("Thermal Recovery Progressing", category="ACTION")
+                            self._add_event(f"Thermal Recovery Progressing — {xai_summary}", category="ACTION")
                         self.broadcaster.emit_cooling_intervention("Orchestrated Balanced Mode")
                     elif thermal_mode == "QUIET":
-                        self._add_event("Thermal Recovery Complete", category="HEALTHY")
+                        self._add_event(f"Thermal Recovery Complete — {xai_summary}", category="HEALTHY")
                         self.broadcaster.emit_cooling_intervention("Restored Quiet Mode")
                 self.last_thermal_mode = thermal_mode
 
@@ -307,14 +320,15 @@ class LiveRuntimeManager:
                 "current_lead_time_sec": self.lead_time_monitor.current_lead_time,
                 "thermal_mode": thermal_mode,
                 "events": self.events_log,
-                "diagnostics": diagnostics
+                "diagnostics": diagnostics,
+                "xai": xai_explanation
             }
             self.stream_bus.publish(state)
             
             # 7. Record Demo Frame
             self.demo_recorder.record_frame(state)
             
-            # Maintain tick rate (e.g., 10Hz)
+            # Maintain tick rate (e.g., 10Hz), ensuring at least 10ms sleep to prevent thread spin burn
             elapsed = self.clock.get_time() - start_t
-            if elapsed < 0.1:
-                self.clock.sync_sleep(0.1 - elapsed)
+            sleep_dur = max(0.01, 0.1 - elapsed)
+            self.clock.sync_sleep(sleep_dur)

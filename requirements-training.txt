@@ -1,0 +1,13 @@
+# Training and Research Requirements
+# Use for offline model training, dataset preprocessing, and experimental GNN research.
+
+numpy
+pandas
+psutil
+scikit-learn
+xgboost
+joblib
+matplotlib
+pytest
+torch
+# torch-geometric

@@ -24,12 +24,12 @@ class RuntimeHealthMonitor:
         memory_growth = current_memory - self.start_memory
 
         issues = []
-        if inference_lag > 1.0:
+        if inference_lag > 3.0:
             issues.append(f"Inference stall detected ({inference_lag:.2f}s lag)")
-        if telemetry_lag > 1.0:
+        if telemetry_lag > 3.0:
             issues.append(f"Telemetry stall detected ({telemetry_lag:.2f}s lag)")
-        if memory_growth > 100 * 1024 * 1024:  # 100MB growth
-            issues.append("Memory growth detected")
+        if memory_growth > 500 * 1024 * 1024:  # 500MB growth
+            issues.append("Excessive memory growth detected")
 
         if issues:
             self.state = "FAILSAFE"

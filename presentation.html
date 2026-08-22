@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thervo — Predictive Cooling Presentation</title>
+    <!-- Modern Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #07090e;
+            --bg-card: #0e121b;
+            --bg-card-hover: #151b27;
+            --border-color: #1e2638;
+            --border-highlight: #2a3650;
+            --accent-cyan: #00e5ff;
+            --accent-cyan-dim: rgba(0, 229, 255, 0.12);
+            --accent-green: #00e676;
+            --accent-green-dim: rgba(0, 230, 118, 0.12);
+            --accent-orange: #ff9100;
+            --accent-red: #ff3d00;
+            --text-main: #f0f4f8;
+            --text-muted: #8a99ad;
+            --text-dim: #5a697d;
+            --font-main: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Slide Container */
+        .presentation-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            height: calc(100vh - 60px);
+            overflow: hidden;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            visibility: hidden;
+            transform: scale(0.98);
+            transition: opacity 0.4s ease, transform 0.4s ease, visibility 0.4s;
+            padding: 40px 70px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            overflow-y: auto;
+        }
+
+        .slide.active {
+            opacity: 1;
+            visibility: visible;
+            transform: scale(1);
+            z-index: 10;
+        }
+
+        /* Navigation Bar */
+        .nav-bar {
+            height: 60px;
+            background: #090c14;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+            z-index: 100;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: var(--accent-cyan);
+        }
+
+        .nav-brand span {
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .btn-nav {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-nav:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .slide-counter {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--text-muted);
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .progress-bar-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: var(--border-color);
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-green));
+            width: 10%;
+            transition: width 0.3s ease;
+        }
+
+        /* Slide Content Typography */
+        .slide-header {
+            margin-bottom: 24px;
+        }
+
+        .category-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--accent-cyan);
+            background: var(--accent-cyan-dim);
+            border: 1px solid rgba(0, 229, 255, 0.2);
+            padding: 4px 10px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+        }
+
+        .slide-title {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: var(--text-main);
+            line-height: 1.25;
+        }
+
+        .slide-subtitle {
+            font-size: 16px;
+            color: var(--text-muted);
+            margin-top: 6px;
+            font-weight: 400;
+        }
+
+        /* Grid Layouts */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            align-items: center;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+
+        /* Glass Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            position: relative;
+            transition: border-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: var(--border-highlight);
+        }
+
+        .card-cyan {
+            border-top: 3px solid var(--accent-cyan);
+        }
+
+        .card-green {
+            border-top: 3px solid var(--accent-green);
+        }
+
+        .card-orange {
+            border-top: 3px solid var(--accent-orange);
+        }
+
+        /* Bullet Points & Lists */
+        .bullet-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .bullet-list li {
+            position: relative;
+            padding-left: 24px;
+            font-size: 15px;
+            color: #d1d9e6;
+            line-height: 1.5;
+        }
+
+        .bullet-list li::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 8px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+        }
+
+        .bullet-list.green li::before {
+            background: var(--accent-green);
+        }
+
+        /* Visual Diagram Components */
+        .flow-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            gap: 16px;
+        }
+
+        .flow-step {
+            flex: 1;
+            background: #090d16;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .flow-step-num {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--accent-cyan);
+            margin-bottom: 6px;
+        }
+
+        .flow-step-title {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .flow-step-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .flow-arrow {
+            color: var(--accent-cyan);
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        /* Callout Box */
+        .callout-box {
+            background: rgba(0, 229, 255, 0.05);
+            border: 1px solid rgba(0, 229, 255, 0.3);
+            border-left: 4px solid var(--accent-cyan);
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-top: 20px;
+        }
+
+        .callout-text {
+            font-size: 17px;
+            font-weight: 600;
+            color: #ffffff;
+            line-height: 1.4;
+            font-style: italic;
+        }
+
+        /* Comparison Table */
+        .comp-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .comp-table th, .comp-table td {
+            padding: 14px 20px;
+            text-align: left;
+            font-size: 14px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .comp-table th {
+            background: #0b0f19;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+        }
+
+        .comp-table th:last-child {
+            color: var(--accent-cyan);
+            background: rgba(0, 229, 255, 0.06);
+        }
+
+        .comp-table td:last-child {
+            background: rgba(0, 229, 255, 0.03);
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+
+        /* Mockup Dashboard */
+        .dashboard-mockup {
+            background: #090c14;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            font-family: var(--font-mono);
+        }
+
+        .mock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+
+        .mock-title {
+            font-size: 13px;
+            color: var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        .rack-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+        }
+
+        .rack-item {
+            background: #111622;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .rack-item.high-risk {
+            border-color: var(--accent-orange);
+            background: rgba(255, 145, 0, 0.08);
+        }
+
+        .rack-item.critical-risk {
+            border-color: var(--accent-red);
+            background: rgba(255, 61, 0, 0.12);
+        }
+
+        .rack-item.active-cooling {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 229, 255, 0.1);
+        }
+
+        .rack-id {
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        .rack-score {
+            font-size: 15px;
+            font-weight: 700;
+            margin: 4px 0;
+        }
+
+        .rack-status {
+            font-size: 9px;
+            text-transform: uppercase;
+        }
+
+        /* Slide 1 Background Image Styling */
+        .title-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.22;
+            z-index: 1;
+            pointer-events: none;
+            filter: contrast(1.1) brightness(0.8);
+        }
+
+        .title-content {
+            position: relative;
+            z-index: 2;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            max-width: 900px;
+        }
+
+        /* Footer Info */
+        .slide-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            padding-top: 16px;
+            margin-top: 24px;
+            font-size: 12px;
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Progress Bar -->
+    <div class="progress-bar-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <!-- Presentation Container -->
+    <div class="presentation-container">
+
+        <!-- SLIDE 1: TITLE -->
+        <div class="slide active" id="slide-1">
+            <img src="assets/thervo_datacenter_thermal.jpg" alt="Data Center Thermal Visual" class="title-bg">
+            <div class="title-content">
+                <div class="category-tag">Yuva Yodha Tech Challenge &bull; Smart Buildings</div>
+                <h1 style="font-size: 72px; font-weight: 800; letter-spacing: -2px; color: #ffffff; margin-bottom: 12px;">Thervo</h1>
+                <h2 style="font-size: 26px; font-weight: 500; color: var(--accent-cyan); margin-bottom: 24px;">Predictive Cooling for a More Efficient Digital World</h2>
+                <p style="font-size: 18px; color: var(--text-muted); max-width: 650px; line-height: 1.5;">
+                    AI-driven, sensor-free thermal intelligence for data centers
+                </p>
+                <div style="margin-top: 40px; display: flex; gap: 16px;">
+                    <div style="background: rgba(0, 229, 255, 0.1); border: 1px solid var(--accent-cyan); padding: 8px 16px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--accent-cyan);">
+                        [ Predictive Thermal Risk Engine ]
+                    </div>
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);">
+                        Zero Hardware Sensors Required
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Thervo Project Pitch Deck</span>
+                <span>Slide 1 / 10</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 2: THE PROBLEM -->
+        <div class="slide" id="slide-2">
+            <div class="slide-header">
+                <div class="category-tag">Problem Analysis</div>
+                <h2 class="slide-title">Cooling is becoming a hidden cost of our digital future</h2>
+                <p class="slide-subtitle">Traditional data center cooling cannot keep up with high-density AI workloads.</p>
+            </div>
+
+            <div class="grid-2">
+                <div>
+                    <ul class="bullet-list">
+                        <li><strong>Expanding Energy Demand:</strong> AI and high-performance computing (HPC) create unprecedented power density.</li>
+                        <li><strong>Major Energy Share:</strong> Cooling represents up to 40% of overall data center electricity usage.</li>
+                        <li><strong>Reactive Model:</strong> Conventional cooling triggers only AFTER heat has already accumulated.</li>
+                        <li><strong>Blanket Inefficiency:</strong> Entire halls or aisles are flooded with chilled air even when only isolated racks are running hot.</li>
+                        <li><strong>Delayed Sensor Feedback:</strong> Physical ambient sensors detect heat too late, after thermal conditions have developed.</li>
+                    </ul>
+                </div>
+                <div>
+                    <div class="card card-cyan">
+                        <div style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-cyan); margin-bottom: 12px;">TODAY'S REACTIVE COOLING LOOP</div>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div style="background: #090d16; padding: 10px 14px; border-radius: 6px; font-size: 13px; display: flex; justify-content: space-between;">
+                                <span>1. Workload Spikes</span>
+                                <span style="color: var(--accent-orange);">CPU/GPU load rises</span>
+                            </div>
+                            <div style="text-align: center; color: var(--text-dim);">&darr;</div>
+                            <div style="background: #090d16; padding: 10px 14px; border-radius: 6px; font-size: 13px; display: flex; justify-content: space-between;">
+                                <span>2. Heat Develops</span>
+                                <span style="color: var(--accent-red);">Physical heat accumulates</span>
+                            </div>
+                            <div style="text-align: center; color: var(--text-dim);">&darr;</div>
+                            <div style="background: #090d16; padding: 10px 14px; border-radius: 6px; font-size: 13px; display: flex; justify-content: space-between;">
+                                <span>3. Sensor Detects</span>
+                                <span style="color: var(--text-muted);">Ambient probe triggers</span>
+                            </div>
+                            <div style="text-align: center; color: var(--text-dim);">&darr;</div>
+                            <div style="background: #090d16; padding: 10px 14px; border-radius: 6px; font-size: 13px; display: flex; justify-content: space-between;">
+                                <span>4. Cooling Reacts</span>
+                                <span style="color: var(--accent-cyan);">Floods entire zone</span>
+                            </div>
+                        </div>
+                        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--border-color); text-align: center; font-size: 12px; color: var(--accent-red); font-family: var(--font-mono);">
+                            RESULT: Wasted Energy & Continuous Thermal Lag
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide-footer">
+                <span>Smart Buildings Challenge — Yuva Yodha Tech Challenge</span>
+                <span>Slide 2 / 10</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 3: WHY IT MATTERS -->
+        <div class="slide" id="slide-3">
+            <div class="slide-header">
+                <div class="category-tag">Strategic Relevance</div>
+                <h2 class="slide-title">We shouldn't have to cool everything to protect anything</h2>
+                <p class="slide-subtitle">Precision and foresight are critical for modern data infrastructure sustainability.</p>
+            </div>
+
+            <div class="grid-2">
+                <div>
+                    <ul class="bullet-list">
+                        <li><strong>Relentless Computing Scale:</strong> Growing compute workloads make traditional cooling cost-prohibitive.</li>
+                        <li><strong>Operational Inflation:</strong> Blanket cooling inflates electricity bills and operational expenditure.</li>
+                        <li><strong>Thermal Stress Risks:</strong> Delayed cooling exposes sensitive hardware to thermal throttling and degradation.</li>
+                        <li><strong>Predictive Shift Needed:</strong> Operators require pre-emptive rack-level thermal visibility before heat spikes occur.</li>
+                    </ul>
+
+                    <div class="callout-box">
+                        <div class="callout-text">
+                            "Thervo asks a simple question: What if we could predict where cooling will be needed before the heat arrives?"
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="card" style="text-align: center;">
+                        <div style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-green); margin-bottom: 16px;">TARGETED vs BLANKET COOLING</div>
+                        <!-- Graphic comparison -->
+                        <div style="display: flex; gap: 16px;">
+                            <div style="flex: 1; background: #090d16; padding: 16px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <div style="font-size: 12px; color: var(--accent-red); margin-bottom: 8px;">Blanket Cooling</div>
+                                <div style="height: 100px; background: rgba(0, 229, 255, 0.15); border: 1px dashed var(--accent-cyan); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--accent-cyan);">
+                                    Entire Zone Chilled (High Waste)
+                                </div>
+                            </div>
+                            <div style="flex: 1; background: #090d16; padding: 16px; border-radius: 8px; border: 1px solid var(--accent-green);">
+                                <div style="font-size: 12px; color: var(--accent-green); margin-bottom: 8px;">Targeted (Thervo)</div>
+                                <div style="height: 100px; display: flex; gap: 4px;">
+                                    <div style="flex:1; background:#111622; border-radius:3px;"></div>
+                                    <div style="flex:1; background: rgba(0, 230, 118, 0.3); border:1px solid var(--accent-green); border-radius:3px; display:flex; align-items:center; justify-content:center; font-size:9px; color:var(--accent-green);">Rack 03</div>
+                                    <div style="flex:1; background:#111622; border-radius:3px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide-footer">
+                <span>Thervo Thermal Intelligence</span>
+                <span>Slide 3 / 10</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 4: THE SOLUTION -->
+        <div class="slide" id="slide-4">
+            <div class="slide-header">
+                <div class="category-tag">Core Solution</div>
+                <h2 class="slide-title">Meet Thervo</h2>
+                <p class="slide-subtitle">AI-driven predictive cooling operating in 3 simple steps.</p>
+            </div>
+
+            <div class="grid-3" style="margin-bottom: 24px;">
+                <div class="card card-cyan">
+                    <div style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-cyan); margin-bottom: 8px;">STEP 01</div>
+                    <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">Understand Workload</h3>
+                    <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+                        Ingests existing server telemetry directly from host operating systems:
+                        <strong>CPU, GPU, Memory, Disk I/O, Network I/O</strong>.
+                    </p>
+                </div>
+
+                <div class="card card-green">
+                    <div style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-green); margin-bottom: 8px;">STEP 02</div>
+                    <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">Predict Thermal Risk</h3>
+                    <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+                        Machine learning models convert real-time workload behavior into pre-emptive <strong>rack-level thermal risk scores</strong>.
+                    </p>
+                </div>
+
+                <div class="card card-orange">
+                    <div style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-orange); margin-bottom: 8px;">STEP 03</div>
+                    <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">Act Before the Problem</h3>
+                    <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+                        Cooling airflow is targeted directly toward specific racks where thermal risk is actively developing.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Central Product Diagram -->
+            <div class="flow-container">
+                <div class="flow-step">
+                    <div class="flow-step-num">INPUT</div>
+                    <div class="flow-step-title">Server Telemetry</div>
+                    <div class="flow-step-desc">CPU, GPU, RAM, I/O</div>
+                </div>
+                <div class="flow-arrow">&rarr;</div>
+                <div class="flow-step" style="border-color: var(--accent-cyan);">
+                    <div class="flow-step-num" style="color: var(--accent-cyan);">ENGINE</div>
+                    <div class="flow-step-title">AI Risk Prediction</div>
+                    <div class="flow-step-desc">XGBoost + Graph Heat</div>
+                </div>
+                <div class="flow-arrow">&rarr;</div>
+                <div class="flow-step" style="border-color: var(--accent-green);">
+                    <div class="flow-step-num" style="color: var(--accent-green);">SIGNAL</div>
+                    <div class="flow-step-title">Rack-level Risk Score</div>
+                    <div class="flow-step-desc">Normalized [0.0 - 1.0]</div>
+                </div>
+                <div class="flow-arrow">&rarr;</div>
+                <div class="flow-step">
+                    <div class="flow-step-num">ACTION</div>
+                    <div class="flow-step-title">Targeted Cooling</div>
+                    <div class="flow-step-desc">Pre-emptive Airflow</div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 16px;">
+                <span style="background: rgba(0, 230, 118, 0.1); border: 1px solid var(--accent-green); color: var(--accent-green); font-family: var(--font-mono); font-size: 13px; padding: 6px 16px; border-radius: 20px;">
+                    Key Differentiator: No dedicated temperature sensors required
+                </span>
+            </div>
+
+            <div class="slide-footer">
+                <span>Thervo Solution Overview</span>
+                <span>Slide 4 / 10</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 5: HOW THERVO WORKS -->
+        <div class="slide" id="slide-5">
+            <div class="slide-header">
+                <div class="category-tag">Technical Architecture</div>
+                <h2 class="slide-title">From workload signals to thermal intelligence</h2>
+                <p class="slide-subtitle">Data pipeline and algorithmic foundation driving pre-emptive cooling decisions.</p>
+            </div>
+
+            <div class="card" style="margin-bottom: 24px; padding: 20px;">
+                <div style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-cyan); margin-bottom: 12px;">SYSTEM PIPELINE FLOW</div>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px;">
+                    <div style="background: #090d16; padding: 10px; border-radius: 6px; text-align: center; flex: 1; border: 1px solid var(--border-color);">
+                        Server Workload Telemetry
+                    </div>
+                    <div>&rarr;</div>
+                    <div style="background: #090d16; padding: 10px; border-radius: 6px; text-align: center; flex: 1; border: 1px solid var(--border-color);">
+                        Feature Processing
+                    </div>
+                    <div>&rarr;</div>
+                    <div style="background: #090d16; padding: 10px; border-radius: 6px; text-align: center; flex: 1; border: 1px solid var(--accent-cyan); color: var(--accent-cyan);">
+                        15-Feature Vector
+                    </div>
+                    <div>&rarr;</div>
+                    <div style="background: #090d16; padding: 10px; border-radius: 6px; text-align: center; flex: 1; border: 1px solid var(--accent-cyan);">
+                        XGBoost Risk Model
+                    </div>
+                    <div>+</div>
+                    <div style="background: #090d16; padding: 10px; border-radius: 6px; text-align: center; flex: 1; border: 1px solid var(--accent-green); color: var(--accent-green);">
+                        Graph Heat Propagation
+                    </div>
+                    <div>&rarr;</div>
+                    <div style="background: #090d16; padding: 10px; border-radius: 6px; text-align: center; flex: 1; border: 1px solid var(--border-color);">
+                        Composite Rack Risk
+                    </div>
+                    <div>&rarr;</div>
+                    <div style="background: #090d16; padding: 10px; border-radius: 6px; text-align: center; flex: 1; border: 1px solid var(--accent-orange); color: var(--accent-orange);">
+                        Cooling Orchestration
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div>
+                    <ul class="bullet-list">
+                        <li><strong>Workload Heat Proxy:</strong> CPU and GPU compute utilization metrics serve as primary heat generation proxies.</li>
+                        <li><strong>Graph Thermal Context:</strong> Neighboring rack influence is modeled via graph-based thermal propagation logic.</li>
+                        <li><strong>XGBoost Risk Engine:</strong> Fast, deterministic XGBoost model delivers primary predictive risk scoring.</li>
+                    </ul>
+                </div>
+                <div>
+                    <ul class="bullet-list green">
+                        <li><strong>Composite Fusion:</strong> Merges single-rack XGBoost prediction with spatial neighbor thermal influence.</li>
+                        <li><strong>Normalized Bounding:</strong> Risk outputs are strictly bounded between 0.0 (Optimal) and 1.0 (Critical).</li>
+                        <li><strong>Low Overhead:</strong> Lightweight inference pipeline runs seamlessly without expensive hardware dependencies.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="slide-footer">
+                <span>Technical Depth & Architecture</span>
+                <span>Slide 5 / 10</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 6: USER JOURNEY / PRODUCT EXPERIENCE -->
+        <div class="slide" id="slide-6">
+            <div class="slide-header">
+                <div class="category-tag">Product Experience</div>
+                <h2 class="slide-title">What an operator sees</h2>
+                <p class="slide-subtitle">Mission control workflow for real-time facility visibility and pre-emptive control.</p>
+            </div>
+
+            <div class="grid-2">
+                <div>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; gap: 12px; align-items: flex-start;">
+                            <span style="background: var(--accent-cyan); color: #000; font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">01</span>
+                            <div style="font-size: 13px; color: #d1d9e6;">Operator opens Thervo Mission Control dashboard</div>
+                        </div>
+                        <div style="display: flex; gap: 12px; align-items: flex-start;">
+                            <span style="background: var(--accent-cyan); color: #000; font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">02</span>
+                            <div style="font-size: 13px; color: #d1d9e6;">Monitors real-time rack-level thermal risk heat grid</div>
+                        </div>
+                        <div style="display: flex; gap: 12px; align-items: flex-start;">
+                            <span style="background: var(--accent-cyan); color: #000; font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">03</span>
+                            <div style="font-size: 13px; color: #d1d9e6;">Identifies emerging high-risk racks prior to heat accumulation</div>
+                        </div>
+                        <div style="display: flex; gap: 12px; align-items: flex-start;">
+                            <span style="background: var(--accent-orange); color: #000; font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">04</span>
+                            <div style="font-size: 13px; color: #d1d9e6;">Receives pre-emptive risk alerts before critical thresholds</div>
+                        </div>
+                        <div style="display: flex; gap: 12px; align-items: flex-start;">
+                            <span style="background: var(--accent-green); color: #000; font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">05</span>
+                            <div style="font-size: 13px; color: #d1d9e6;">Cooling triggers automatically when risk thresholds are breached</div>
+                        </div>
+                        <div style="display: flex; gap: 12px; align-items: flex-start;">
+                            <span style="background: var(--border-highlight); color: #fff; font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">06</span>
+                            <div style="font-size: 13px; color: #d1d9e6;">Operator can manually override cooling when necessary</div>
+                        </div>
+                        <div style="display: flex; gap: 12px; align-items: flex-start;">
+                            <span style="background: var(--border-highlight); color: #fff; font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">07</span>
+                            <div style="font-size: 13px; color: #d1d9e6;">Risk history and energy metrics evaluate long-term efficiency</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dashboard Mockup -->
+                <div>
+                    <div class="dashboard-mockup">
+                        <div class="mock-header">
+                            <div class="mock-title">
+                                <div class="status-dot"></div>
+                                THERVO MISSION CONTROL
+                            </div>
+                            <div style="font-size: 10px; color: var(--text-muted);">LIVE RACK GRID</div>
+                        </div>
+
+                        <div class="rack-grid">
+                            <div class="rack-item">
+                                <div class="rack-id">RACK-01</div>
+                                <div class="rack-score" style="color: var(--accent-green);">0.14</div>
+                                <div class="rack-status" style="color: var(--text-muted);">NOMINAL</div>
+                            </div>
+                            <div class="rack-item active-cooling">
+                                <div class="rack-id">RACK-02</div>
+                                <div class="rack-score" style="color: var(--accent-cyan);">0.42</div>
+                                <div class="rack-status" style="color: var(--accent-cyan);">COOLING</div>
+                            </div>
+                            <div class="rack-item high-risk">
+                                <div class="rack-id">RACK-03</div>
+                                <div class="rack-score" style="color: var(--accent-orange);">0.78</div>
+                                <div class="rack-status" style="color: var(--accent-orange);">WARNING</div>
+                            </div>
+                            <div class="rack-item critical-risk">
+                                <div class="rack-id">RACK-04</div>
+                                <div class="rack-score" style="color: var(--accent-red);">0.91</div>
+                                <div class="rack-status" style="color: var(--accent-red);">ALERT</div>
+                            </div>
+                            <div class="rack-item">
+                                <div class="rack-id">RACK-05</div>
+                                <div class="rack-score" style="color: var(--accent-green);">0.22</div>
+                                <div class="rack-status" style="color: var(--text-muted);">NOMINAL</div>
+                            </div>
+                            <div class="rack-item">
+                                <div class="rack-id">RACK-06</div>
+                                <div class="rack-score" style="color: var(--accent-green);">0.18</div>
+                                <div class="rack-status" style="color: var(--text-muted);">NOMINAL</div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 16px; background: rgba(255, 61, 0, 0.1); border: 1px solid var(--accent-red); padding: 8px 12px; border-radius: 6px; font-size: 11px; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: var(--accent-red); font-weight: 600;">PREDICTIVE ALERT: Rack-04 thermal risk spiking</span>
+                            <span style="color: #fff; background: var(--accent-red); padding: 2px 8px; border-radius: 4px; font-size: 10px;">TRIGGER COOLING</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide-footer">
+                <span>Operator Dashboard & Controls</span>
+                <span>Slide 6 / 10</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 7: WHAT MAKES THERVO DIFFERENT -->
+        <div class="slide" id="slide-7">
+            <div class="slide-header">
+                <div class="category-tag">Competitive Differentiation</div>
+                <h2 class="slide-title">Predictive. Sensor-free. Rack-level.</h2>
+                <p class="slide-subtitle">Reinventing cooling strategy from reactive zones to workload-aware micro-zones.</p>
+            </div>
+
+            <table class="comp-table" style="margin-bottom: 24px;">
+                <thead>
+                    <tr>
+                        <th>Dimension</th>
+                        <th>Traditional Cooling Systems</th>
+                        <th>Thervo Thermal Intelligence</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Operational Mode</strong></td>
+                        <td>Reactive (Responds post-heat)</td>
+                        <td>Predictive (Acts pre-heat)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cooling Granularity</strong></td>
+                        <td>Broad / Zone-Level Flooding</td>
+                        <td>Micro-Zone / Rack-Level Targeting</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Hardware Dependency</strong></td>
+                        <td>Requires Physical Sensors</td>
+                        <td>Uses Existing Telemetry (Sensor-Free)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Decision Signal</strong></td>
+                        <td>Static Temperature Alarms</td>
+                        <td>AI-Driven Thermal Risk Scoring</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="grid-3">
+                <div class="card card-cyan">
+                    <div style="font-size: 14px; font-weight: 700; margin-bottom: 6px; color: var(--accent-cyan);">1. Sensor-Free Inference</div>
+                    <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+                        Eliminates hardware deployment and sensor maintenance costs by leveraging existing server performance signals.
+                    </div>
+                </div>
+
+                <div class="card card-green">
+                    <div style="font-size: 14px; font-weight: 700; margin-bottom: 6px; color: var(--accent-green);">2. Workload-Aware Foresight</div>
+                    <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+                        Translates compute spikes directly into predictive heat accumulation vectors before temperatures rise.
+                    </div>
+                </div>
+
+                <div class="card card-orange">
+                    <div style="font-size: 14px; font-weight: 700; margin-bottom: 6px; color: var(--accent-orange);">3. Graph Neighbor Model</div>
+                    <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+                        Accounts for spatial heat dissipation and thermal bleed between neighboring server racks in the aisle.
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide-footer">
+                <span>Value Proposition & Differentiation</span>
+                <span>Slide 7 / 10</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 8: EXPECTED IMPACT -->
+        <div class="slide" id="slide-8">
+            <div class="slide-header">
+                <div class="category-tag">Expected Impact</div>
+                <h2 class="slide-title">Less wasted cooling. Earlier intervention. Smarter infrastructure.</h2>
+                <p class="slide-subtitle">Value creation across energy, operational cost, reliability, and sustainability.</p>
+            </div>
+
+            <div class="grid-4" style="margin-bottom: 24px;">
+                <div class="card card-cyan">
+                    <div style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-cyan); margin-bottom: 6px;">ENERGY</div>
+                    <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">Targeted Cooling</h4>
+                    <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+                        Reduces unnecessary cooling energy by directing airflow strictly where heat is predicted to accumulate.
+                    </p>
+                </div>
+
+                <div class="card card-green">
+                    <div style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-green); margin-bottom: 6px;">COST</div>
+                    <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">OpEx & CapEx Efficiency</h4>
+                    <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+                        Lowers cooling electricity OpEx and avoids capital expense for physical sensor hardware deployment.
+                    </p>
+                </div>
+
+                <div class="card card-orange">
+                    <div style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-orange); margin-bottom: 6px;">RELIABILITY</div>
+                    <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">Early Hazard Mitigation</h4>
+                    <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+                        Identifies emerging thermal risks earlier, reducing hardware stress and thermal throttling incidents.
+                    </p>
+                </div>
+
+                <div class="card" style="border-top: 3px solid #ab47bc;">
+                    <div style="font-family: var(--font-mono); font-size: 12px; color: #ab47bc; margin-bottom: 6px;">SUSTAINABILITY</div>
+                    <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 6px;">Lower PUE Profile</h4>
+                    <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+                        Supports greener, lower PUE operations for energy-intensive AI digital infrastructure.
+                    </p>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
+                    <div style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-cyan); margin-bottom: 6px;">STAKEHOLDERS & BENEFICIARIES</div>
+                    <div style="font-size: 13px; color: var(--text-main); line-height: 1.5;">
+                        &bull; Data-center operators &nbsp;|&nbsp; &bull; Infrastructure & SRE teams<br>
+                        &bull; Facilities & energy managers &nbsp;|&nbsp; &bull; High-density GPU/AI cloud facilities
+                    </div>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
+                    <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">IMPACT FRAMEWORK NOTE</div>
+                    <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+                        Impact metrics represent targeted model goals and simulation benchmarks. Real-world savings vary by data center architecture and cooling hardware infrastructure.
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide-footer">
+                <span>Expected Impact & Scope</span>
+                <span>Slide 8 / 10</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 9: IMPLEMENTATION ROADMAP -->
+        <div class="slide" id="slide-9">
+            <div class="slide-header">
+                <div class="category-tag">Execution Plan</div>
+                <h2 class="slide-title">From validated system to production-scale cooling intelligence</h2>
+                <p class="slide-subtitle">Clear distinction between completed validation and future deployment phases.</p>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
+                <!-- Phase 0 -->
+                <div style="background: rgba(0, 230, 118, 0.08); border: 1px solid var(--accent-green); border-radius: 8px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <span style="background: var(--accent-green); color: #000; font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; margin-right: 12px;">PHASE 0 &bull; COMPLETED</span>
+                        <strong style="font-size: 14px;">Simulation & Pipeline Validation</strong>
+                    </div>
+                    <div style="font-size: 12px; color: var(--accent-green);">
+                        Interactive simulator &bull; ML pipeline &bull; Synthetic dataset validation
+                    </div>
+                </div>
+
+                <!-- Phase 1 -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <span style="background: var(--accent-cyan-dim); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; margin-right: 12px;">PHASE 1</span>
+                        <strong style="font-size: 14px;">Pilot Deployment</strong>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted);">
+                        Live telemetry integration &bull; Single-floor deployment &bull; Baseline energy comparison
+                    </div>
+                </div>
+
+                <!-- Phase 2 -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <span style="background: var(--bg-card-hover); color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; margin-right: 12px;">PHASE 2</span>
+                        <strong style="font-size: 14px;">Production Scale</strong>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted);">
+                        Multi-floor deployment &bull; DCIM integration &bull; Production API & Role access
+                    </div>
+                </div>
+
+                <!-- Phase 3 -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <span style="background: var(--bg-card-hover); color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; margin-right: 12px;">PHASE 3</span>
+                        <strong style="font-size: 14px;">Intelligence Layer</strong>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted);">
+                        Temporal forecasting &bull; Anomaly detection &bull; Digital twin simulation
+                    </div>
+                </div>
+
+                <!-- Phase 4 -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <span style="background: var(--bg-card-hover); color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; margin-right: 12px;">PHASE 4</span>
+                        <strong style="font-size: 14px;">Enterprise Platform</strong>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted);">
+                        Multi-facility orchestration &bull; Enterprise SaaS offering &bull; Partner ecosystem
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide-footer">
+                <span>Implementation Roadmap & Milestones</span>
+                <span>Slide 9 / 10</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 10: TEAM + CLOSING -->
+        <div class="slide" id="slide-10">
+            <div class="slide-header">
+                <div class="category-tag">Team & Vision</div>
+                <h2 class="slide-title">Building a smarter way to cool the digital world</h2>
+                <p class="slide-subtitle">Engineered for real-world data center sustainability.</p>
+            </div>
+
+            <div class="grid-3" style="margin-bottom: 24px;">
+                <div class="card">
+                    <div style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-cyan); margin-bottom: 4px;">AI & MACHINE LEARNING</div>
+                    <h4 style="font-size: 16px; font-weight: 700; color: #fff;">[ Team Member 1 ]</h4>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.4;">
+                        Lead AI Architect &bull; Feature engineering, XGBoost predictive modeling, and spatial graph propagation algorithm.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <div style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-green); margin-bottom: 4px;">SYSTEMS & TELEMETRY</div>
+                    <h4 style="font-size: 16px; font-weight: 700; color: #fff;">[ Team Member 2 ]</h4>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.4;">
+                        Systems Engineer &bull; Real-time telemetry ingestion pipeline, OS hardware API bindings, and runtime engine.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <div style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-orange); margin-bottom: 4px;">PRODUCT & OPERATIONS</div>
+                    <h4 style="font-size: 16px; font-weight: 700; color: #fff;">[ Team Member 3 ]</h4>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.4;">
+                        Product Lead &bull; Mission Control UX, DCIM integration strategy, and Yuva Yodha Challenge submission.
+                    </p>
+                </div>
+            </div>
+
+            <div class="callout-box" style="margin-top: 0; text-align: center;">
+                <div class="callout-text" style="font-size: 18px;">
+                    "Every computation creates heat. We believe cooling should be intelligent enough to know where that heat is going next."
+                </div>
+                <div style="margin-top: 14px; font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--accent-cyan);">
+                    Thervo &mdash; "Predict before you cool."
+                </div>
+            </div>
+
+            <div class="slide-footer">
+                <span>Thervo — Yuva Yodha Tech Challenge Pitch</span>
+                <span>Slide 10 / 10</span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Navigation Bar -->
+    <div class="nav-bar">
+        <div class="nav-brand">
+            THERVO <span>| Predictive Thermal Intelligence</span>
+        </div>
+
+        <div class="nav-controls">
+            <button class="btn-nav" id="prevBtn" onclick="prevSlide()">&larr; Prev</button>
+            <div class="slide-counter" id="slideCounter">1 / 10</div>
+            <button class="btn-nav" id="nextBtn" onclick="nextSlide()">Next &rarr;</button>
+        </div>
+    </div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = 10;
+
+        function showSlide(index) {
+            if (index < 1) index = 1;
+            if (index > totalSlides) index = totalSlides;
+
+            currentSlide = index;
+
+            document.querySelectorAll('.slide').forEach((slide, i) => {
+                slide.classList.remove('active');
+                if (i === currentSlide - 1) {
+                    slide.classList.add('active');
+                }
+            });
+
+            document.getElementById('slideCounter').innerText = `${currentSlide} / ${totalSlides}`;
+            document.getElementById('progressBar').style.width = `${(currentSlide / totalSlides) * 100}%`;
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides) {
+                showSlide(currentSlide + 1);
+            }
+        }
+
+        function prevSlide() {
+            if (currentSlide > 1) {
+                showSlide(currentSlide - 1);
+            }
+        }
+
+        // Keyboard Controls
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'Space') {
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                prevSlide();
+            }
+        });
+    </script>
+</body>
+</html>

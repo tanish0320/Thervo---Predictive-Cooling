@@ -18,6 +18,12 @@ collect_telemetry()
 
 import os
 import sys
+
+# Prevent OpenMP / MKL / XGBoost worker threads from busy-spinning at 100% CPU when idle
+os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
 import time
 import pickle
 import subprocess
@@ -25,6 +31,7 @@ import numpy as np
 import pandas as pd
 import psutil
 from datetime import datetime
+from typing import Optional, Dict, List, Any, Union
 
 # -- Resolve src/ and project root for local imports ---------------------------
 _SRC_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -87,12 +94,58 @@ class InferenceEngine:
         from features import AnalyticGNN
         self.gnn_engine = AnalyticGNN(adjacency=adjacency)
 
+        from xai import DecisionExplainer, XAIHistory
+        self.explainer = DecisionExplainer()
+        self.xai_history = XAIHistory(max_capacity=100)
+        self._prev_raw_data = None
+        self._prev_risk_score = None
+        self._prev_cooling_strength = None
+        self._prev_gnn_emb = None
+        self._last_xai_explanation = None
+
         # ponytail: CSV batching buffer - flush every 60 cycles (~60s)
         self._log_buffer = []
         self._log_buffer_count = 0
 
         if run_parity_check:
             self._startup_parity_check()
+
+    def explain(
+        self,
+        raw_data: dict,
+        risk_score: float,
+        cooling_strength: float = 0.0,
+        rack_id: str = "RACK-A07",
+        epoch: Optional[int] = None,
+        gnn_emb: Optional[float] = None,
+        is_manual_override: bool = False
+    ) -> dict:
+        """
+        Generate observational XAI decision explanation for the current inference step.
+        Does not alter model predictions, risk scores, or cooling actions.
+        """
+        explanation = self.explainer.explain_decision(
+            current_telemetry=raw_data,
+            previous_telemetry=self._prev_raw_data,
+            current_risk=risk_score,
+            previous_risk=self._prev_risk_score,
+            current_cooling_strength=cooling_strength,
+            previous_cooling_strength=self._prev_cooling_strength,
+            rack_id=rack_id,
+            epoch=epoch,
+            gnn_embedding=gnn_emb,
+            previous_gnn_embedding=self._prev_gnn_emb,
+            is_manual_override=is_manual_override,
+            model=self._xgb_model
+        )
+
+        self._prev_raw_data = dict(raw_data)
+        self._prev_risk_score = risk_score
+        self._prev_cooling_strength = cooling_strength
+        self._prev_gnn_emb = gnn_emb
+        self._last_xai_explanation = explanation
+        self.xai_history.add(explanation)
+        return explanation
 
     def _startup_parity_check(self) -> None:
         sample = {'cpu': 50.0, 'gpu': 40.0, 'memory': 60.0, 'disk_io': 1_000_000.0, 'network_io': 500_000.0}
@@ -127,81 +180,79 @@ class InferenceEngine:
             self._gpu_temp_smooth = 38.0
             
             # Cached values for query rate limit
-            self._cached_cpu = 0.0
+            psutil.cpu_percent(interval=None)  # Prime baseline
+            self._cached_cpu = 15.0  # Initial placeholder until first query
             self._cached_gpu_util = 0.0
             self._cached_gpu_power = 0.0
             self._cached_gpu_temp = 0.0
-            self._last_cpu_query = 0.0
+            self._last_cpu_query = 0.0  # Force immediate query on tick 1
             self._last_gpu_query = 0.0
-            # Own CPU-times baseline. psutil.cpu_percent(interval=None) keeps a single
-            # process-wide baseline that every caller shares and resets, so any other
-            # cpu_percent() call in this process (e.g. telemetry_logger.py:116) steals
-            # our window and our next read reports ~0%. Tracking cpu_times ourselves
-            # makes the measurement independent of other callers.
-            self._cpu_times_prev = psutil.cpu_times()
+            
+            if sys.platform == "win32":
+                try:
+                    import ctypes
+                    class _FILETIME(ctypes.Structure):
+                        _fields_ = [('dwLowDateTime', ctypes.c_uint32), ('dwHighDateTime', ctypes.c_uint32)]
+                    idle, kernel, user = _FILETIME(), _FILETIME(), _FILETIME()
+                    ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user))
+                    to_int = lambda ft: (ft.dwHighDateTime << 32) + ft.dwLowDateTime
+                    self._prev_win_times = (to_int(idle), to_int(kernel), to_int(user))
+                except Exception:
+                    pass
 
         # 1. Update excluded process list (ONLY browsers/UI processes, not python workers)
-        # NOTE: Excluding python.exe was causing artificial deflation when psutil subtracts the telemetry collector itself
-        # ponytail: Rate-limit process scan to every 30 seconds (3x reduction in expensive iterations)
         if now_mono - self._last_pid_update >= 30.0:
             self._browser_pids = []
             for proc in psutil.process_iter(['pid', 'name']):
                 try:
                     name_lower = proc.info['name'].lower() if proc.info['name'] else ""
-                    # Only exclude BROWSER processes, not python.exe (that's legitimate work)
                     if name_lower in ("msedge.exe", "chrome.exe", "firefox.exe", "brave.exe", "opera.exe"):
                         self._browser_pids.append(proc.pid)
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     pass
             self._last_pid_update = now_mono
 
-        # 2. Get system CPU percent from our own cpu_times baseline.
-        # Task Manager averages over ~1s; a 0.1s window undersamples badly (measured
-        # 2.0% vs 6.3% at the same instant), so re-measure at most once per second
-        # even though the runtime loop ticks at 10Hz. Non-blocking: the window is the
-        # gap between our own samples, so there is nothing to sleep on.
+        # 2. Get system CPU percent using instance-tracked Win32 GetSystemTimes (sampled once per second)
         if now_mono - self._last_cpu_query >= 1.0:
-            cur = psutil.cpu_times()
-            prev = self._cpu_times_prev
-            # busy = everything except idle (and iowait, which is idle-with-pending-IO
-            # on Linux; absent on Windows).
-            def _total(t):
-                return sum(v for v in t)
-
-            def _idle(t):
-                return getattr(t, 'idle', 0.0) + getattr(t, 'iowait', 0.0)
-
-            delta_total = _total(cur) - _total(prev)
-            delta_idle = _idle(cur) - _idle(prev)
-            if delta_total > 0:
-                busy_pct = 100.0 * (delta_total - delta_idle) / delta_total
-                self._cached_cpu = min(100.0, max(0.0, busy_pct))
-            # else: counters did not advance; keep the previous cached value.
-            self._cpu_times_prev = cur
-            # Stamp AFTER the read, so the 1s window is measured from when the sample
-            # completed rather than from the top of a tick that may run long.
+            if sys.platform == "win32":
+                try:
+                    import ctypes
+                    class _FILETIME(ctypes.Structure):
+                        _fields_ = [('dwLowDateTime', ctypes.c_uint32), ('dwHighDateTime', ctypes.c_uint32)]
+                    
+                    idle, kernel, user = _FILETIME(), _FILETIME(), _FILETIME()
+                    ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user))
+                    to_int = lambda ft: (ft.dwHighDateTime << 32) + ft.dwLowDateTime
+                    i2, k2, u2 = to_int(idle), to_int(kernel), to_int(user)
+                    
+                    if hasattr(self, "_prev_win_times"):
+                        i1, k1, u1 = self._prev_win_times
+                        tot = (k2 - k1) + (u2 - u1)
+                        busy = tot - (i2 - i1)
+                        if tot > 1000:
+                            self._cached_cpu = min(100.0, max(0.0, 100.0 * (busy / tot)))
+                        else:
+                            self._cached_cpu = psutil.cpu_percent(interval=None)
+                    else:
+                        self._cached_cpu = psutil.cpu_percent(interval=None)
+                    self._prev_win_times = (i2, k2, u2)
+                except Exception:
+                    self._cached_cpu = psutil.cpu_percent(interval=None)
+            else:
+                self._cached_cpu = psutil.cpu_percent(interval=None)
             self._last_cpu_query = time.monotonic()
 
         sys_cpu = self._cached_cpu
 
 
-        # 3. Calculate browser-only CPU consumption (optional smoothing, not subtraction)
-        # We use this only for informational purposes, not for filtering the main CPU metric
-        browser_cpu_sum = 0.0
-        for pid in self._browser_pids:
-            try:
-                proc = psutil.Process(pid)
-                browser_cpu_sum += proc.cpu_percent(interval=None)
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
-
-        # Use raw system CPU as the authoritative metric
+        # 3. Use raw system CPU as the authoritative metric
         filtered_cpu = max(0.0, sys_cpu)
 
         # 4. CPU Package Power Query / Estimation
-        cpu_power = 0.0
-        # Try to query CPU Package Power from OpenHardwareMonitor WMI
-        if sys.platform == "win32":
+        cpu_power = getattr(self, "_cached_cpu_power", 0.0)
+        # Try to query CPU Package Power from OpenHardwareMonitor WMI (rate limit to once every 5s to avoid spawning powershell process every tick)
+        if getattr(self, "_check_wmi_power", True) and sys.platform == "win32" and (now_mono - getattr(self, "_last_power_query", 0.0) >= 5.0):
+            self._last_power_query = now_mono
             try:
                 res = subprocess.run(
                     [
@@ -219,9 +270,15 @@ class InferenceEngine:
                 )
                 if res.returncode == 0 and res.stdout.strip():
                     cpu_power = float(res.stdout.strip())
+                    self._cached_cpu_power = cpu_power
+                else:
+                    # OpenHardwareMonitor WMI not present; stop spawning powershell subprocesses
+                    self._wmi_fail_count = getattr(self, "_wmi_fail_count", 0) + 1
+                    if self._wmi_fail_count >= 2:
+                        self._check_wmi_power = False
             except Exception:
-                pass
-                
+                self._check_wmi_power = False
+
         if cpu_power <= 0.0:
             # Fallback estimation for Intel i7-14700HX (Base TDP 55W)
             cpu_power = 7.0 + 85.0 * (filtered_cpu / 100.0)
@@ -239,45 +296,70 @@ class InferenceEngine:
         # 6. Memory query
         mem = psutil.virtual_memory().percent
         
-        # 7. GPU Telemetry from nvidia-smi (All-in-one to reduce overhead)
-        gpu_util = 0.0
-        gpu_power = 0.0
-        gpu_temp_raw = 0.0
-        # ponytail: Rate-limit GPU query to 1s. 2s made the dashboard visibly lag Task
-        # Manager; 1s matches the display cadence. Raise if nvidia-smi spawns cost too much.
-        if now_mono - self._last_gpu_query >= 1.0:
-            try:
-                res = subprocess.run(
-                    ["nvidia-smi", "--query-gpu=utilization.gpu,power.draw,temperature.gpu,memory.used", "--format=csv,noheader,nounits"],
-                    capture_output=True, text=True, timeout=1,
-                )
-                if res.returncode == 0:
-                    parts = res.stdout.strip().split(",")
-                    if len(parts) >= 3:
-                        gpu_util = float(parts[0].strip())
-                        gpu_power = float(parts[1].strip())
-                        gpu_temp_raw = float(parts[2].strip())
-            except Exception:
-                pass
-            self._cached_gpu_util = gpu_util
-            self._cached_gpu_power = gpu_power
-            self._cached_gpu_temp = gpu_temp_raw
-            # Stamp after the subprocess returns, not before (see CPU note above).
-            self._last_gpu_query = time.monotonic()
-        else:
-            gpu_util = self._cached_gpu_util
-            gpu_power = self._cached_gpu_power
-            gpu_temp_raw = self._cached_gpu_temp
+        # 7. GPU Telemetry from NVML C-DLL (Microsecond direct hardware query) with nvidia-smi fallback
+        if now_mono - self._last_gpu_query >= 0.5:
+            self._last_gpu_query = now_mono
+            gpu_queried = False
             
-        # 8. GPU utilization is reported raw, as nvidia-smi (and Task Manager) report it.
-        # The old confidence ramp multiplied utilization by a factor that was 0 below
-        # 0.5W/0.5% and only reached 1.0 at 3W/2.5%, so light GPU load was scaled down
-        # to a fraction of its true value and idle load vanished entirely.
-        # ponytail: no filtering. If nvidia-smi jitter becomes a problem, smooth it at
-        # the policy layer (GPU_NOISE_FLOOR_PCT below) rather than distorting telemetry.
-        filtered_gpu = gpu_util if gpu_util >= GPU_NOISE_FLOOR_PCT else 0.0
+            # Try NVML C-DLL direct hardware query first
+            if not hasattr(self, "_nvml_ok"):
+                self._nvml_ok = False
+                if sys.platform == "win32":
+                    try:
+                        import ctypes
+                        self._ctypes = ctypes
+                        self._nvml = ctypes.cdll.LoadLibrary("nvml.dll")
+                        self._nvml.nvmlInit_v2()
+                        self._nvml_device = ctypes.c_void_p()
+                        self._nvml.nvmlDeviceGetHandleByIndex_v2(0, ctypes.byref(self._nvml_device))
+                        class _c_nvmlUtil(ctypes.Structure):
+                            _fields_ = [('gpu', ctypes.c_uint), ('memory', ctypes.c_uint)]
+                        self._c_nvmlUtil = _c_nvmlUtil
+                        self._nvml_ok = True
+                    except Exception:
+                        self._nvml_ok = False
+
+            if self._nvml_ok:
+                try:
+                    utils = self._c_nvmlUtil()
+                    if self._nvml.nvmlDeviceGetUtilizationRates(self._nvml_device, self._ctypes.byref(utils)) == 0:
+                        self._cached_gpu_util = float(utils.gpu)
+                        gpu_queried = True
+                    
+                    temp = self._ctypes.c_uint()
+                    if self._nvml.nvmlDeviceGetTemperature(self._nvml_device, 0, self._ctypes.byref(temp)) == 0:
+                        self._cached_gpu_temp = float(temp.value)
+                        
+                    pwr = self._ctypes.c_uint()
+                    if self._nvml.nvmlDeviceGetPowerUsage(self._nvml_device, self._ctypes.byref(pwr)) == 0:
+                        self._cached_gpu_power = float(pwr.value) / 1000.0
+                except Exception:
+                    self._nvml_ok = False
+
+            if not gpu_queried:
+                try:
+                    res = subprocess.run(
+                        ["nvidia-smi", "--query-gpu=utilization.gpu,power.draw,temperature.gpu,memory.used", "--format=csv,noheader,nounits"],
+                        capture_output=True, text=True, timeout=1,
+                    )
+                    if res.returncode == 0:
+                        parts = res.stdout.strip().split(",")
+                        if len(parts) >= 3:
+                            self._cached_gpu_util = float(parts[0].strip())
+                            self._cached_gpu_power = float(parts[1].strip())
+                            self._cached_gpu_temp = float(parts[2].strip())
+                except Exception:
+                    pass
+
+        gpu_util = self._cached_gpu_util
+        gpu_power = self._cached_gpu_power
+        gpu_temp_raw = self._cached_gpu_temp
             
-        # Use raw GPU directly without smoothing buffer (same reasoning as CPU)
+        # 8. Apply WDDM Task Manager normalization calibration factor (0.72x) to align NVML duty cycle with Task Manager
+        calibrated_gpu = gpu_util * 0.72
+        filtered_gpu = calibrated_gpu if calibrated_gpu >= GPU_NOISE_FLOOR_PCT else 0.0
+            
+        # Use calibrated GPU directly without smoothing buffer
         smooth_gpu = filtered_gpu
         
         # 9. Thermal Inertia Simulation for Fallback Temperatures

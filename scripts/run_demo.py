@@ -1,5 +1,12 @@
 import sys
 import os
+
+# Prevent OpenMP / MKL / XGBoost worker threads from busy-spinning at 100% CPU when idle
+os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
+
 import time
 import threading
 import webbrowser

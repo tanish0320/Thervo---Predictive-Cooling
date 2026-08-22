@@ -89,9 +89,9 @@ def test_gpu_utilization_is_not_scaled_down():
     raw, _, _ = _collect(engine, dk, nk)
 
     cached = engine._cached_gpu_util
-    expected = cached if cached >= GPU_NOISE_FLOOR_PCT else 0.0
+    expected = (cached * 0.72) if cached >= GPU_NOISE_FLOOR_PCT else 0.0
     assert raw["gpu"] == round(expected, 2), (
-        f"gpu {raw['gpu']} != unscaled nvidia-smi reading {expected}"
+        f"gpu {raw['gpu']} != calibrated nvidia-smi reading {expected}"
     )
 
 

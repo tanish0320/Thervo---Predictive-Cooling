@@ -30,7 +30,7 @@ def benchmark_latency():
         risk, lvl, gnn = engine.predict(raw)
         
         t2 = time.perf_counter()
-        target, state, stab = policy.update(risk, raw)
+        target, state, stab, _ = policy.update(risk, raw)
         
         t3 = time.perf_counter()
         controller.write_target(risk, target, state, stab)

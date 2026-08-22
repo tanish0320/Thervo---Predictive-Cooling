@@ -55,6 +55,14 @@ def test_inference_engine_deflation():
     # Simulate multiple telemetry cycles with proper timing
     print("Running 10 telemetry cycles (1 second apart for proper psutil measurement)...")
 
+    # Prime baseline before loop
+    dk_init = psutil.disk_io_counters()
+    nk_init = psutil.net_io_counters()
+    dk_prev = {"val": (dk_init.read_bytes + dk_init.write_bytes) if dk_init else 0, "time": time.monotonic()}
+    nk_prev = {"val": (nk_init.bytes_sent + nk_init.bytes_recv) if nk_init else 0, "time": time.monotonic()}
+    psutil.cpu_percent(interval=None)
+    engine.collect_telemetry(dk_prev, nk_prev)
+
     inflation_ratios = []
 
     for i in range(10):

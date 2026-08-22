@@ -316,7 +316,10 @@ class ThermalModeController:
                 elif hold_expired or switch_target == ThermalMode.FAILSAFE:
                     self.switch_mode(switch_target, reason)
                 else:
-                    self._log("HOLD", f"Hold timer blocking transition to {switch_target.name}")
+                    now_t = time.time()
+                    if (now_t - getattr(self, "_last_hold_log_time", 0.0)) >= 5.0:
+                        self._last_hold_log_time = now_t
+                        self._log("HOLD", f"Hold timer blocking transition to {switch_target.name}")
 
             # Update semantic status safely if not already explicitly set
             if not predictive_pre_cooling:
@@ -414,18 +417,16 @@ class ThermalModeController:
         # Hardware Controller output
         self.hardware_controller.reconcile()
         
-        # Sync high-level mode with hardware controller (handles manual changes / init)
-        if self.hardware_controller.sync_status == "SYNCED":
+        # Sync high-level mode with hardware controller (only when manual external hardware changes occur outside policy)
+        # Avoid ping-ponging active_mode when software policy intentionally requested a mode change
+        if self.hardware_controller.sync_status == "SYNCED" and (time.time() - self.last_switch_time) > self.MIN_MODE_HOLD_SECONDS:
             hw_mode = self.hardware_controller.actual_hardware_mode
             if hw_mode == "PERFORMANCE" and self.active_mode not in (ThermalMode.PERFORMANCE, ThermalMode.FAILSAFE):
                 self.active_mode = ThermalMode.PERFORMANCE
-                self.last_switch_time = time.time()
             elif hw_mode == "BALANCED" and self.active_mode != ThermalMode.BALANCED:
                 self.active_mode = ThermalMode.BALANCED
-                self.last_switch_time = time.time()
             elif hw_mode == "QUIET" and self.active_mode not in (ThermalMode.QUIET, ThermalMode.SILENT_RECOVERY):
                 self.active_mode = ThermalMode.QUIET
-                self.last_switch_time = time.time()
             
         diagnostics["hardware_controller"] = self.hardware_controller.get_telemetry()
 

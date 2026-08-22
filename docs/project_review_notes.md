@@ -29,9 +29,9 @@ graph TD
 2. **Feature Engineering**: A stateful `FeatureProcessor` consumes raw telemetry and generates a **15-dimensional vector** containing normalized base values, 5-second and 10-second rolling averages (via `collections.deque` buffers), and first-order deltas ($X_t - X_{t-1}$).
 3. **Dual Model Evaluation**:
    - **XGBoost Regressor**: Evaluates the 15-dimensional vector to predict the thermal risk score 30 seconds into the future ($y_{t+30}$).
-   - **AnalyticGNN**: A hardcoded mock graph function that aggregates spatial heat propagation by averaging the target rack's heat with its neighbors: $\text{GNN} = 0.7 \times \text{Self} + 0.3 \times \text{Average}(\text{Neighbors})$.
+   - **AnalyticGNN**: A hardcoded mock graph function that aggregates spatial heat propagation by averaging the target rack's heat with its neighbors: `GNN = 0.7 * Self + 0.3 * Average(Neighbors)`.
 4. **Risk Fusion & State Machine**:
-   - The scores are combined via weighted fusion: $\text{Risk} = 0.75 \times \text{XGBoost} + 0.25 \times \text{GNN}$.
+   - The scores are combined via weighted fusion: `Risk = 0.75 * XGBoost + 0.25 * GNN`.
    - The fused risk score is fed to the `CoolingPolicyEngine` state machine, which manages transitions between five states: `QUIET`, `BALANCED`, `PERFORMANCE`, `RECOVERY`, and `FAILSAFE`.
 5. **Actuation**:
    - **Hardware Mode**: The engine executes `llt.exe` (Lenovo Legion Toolkit CLI) via a subprocess to set the laptop's performance profile (`Quiet`, `Balance`, `Performance`).
@@ -46,7 +46,7 @@ graph TD
 *   **Sequential Split Validation**: The training pipeline splits datasets sequentially (time-series splitting) rather than using random cross-validation. This prevents data leakage due to high autocorrelation in consecutive time steps.
 *   **Hysteresis & State Smoothing**: The `CoolingPolicyEngine` implements dynamic hold times (10s to 60s based on transition severity) and slow fan ramp rates (e.g., maximum $+5\%$ RPM/sec increase or $-8\%$ RPM/sec decay) to avoid fan speed oscillation and rapid cycle fatigue.
 *   **Process Filtering & Telemetry Debouncing**: The inference loop iterates over active system processes to identify and subtract CPU usage from browsers and the python control-loop script itself. This isolates the physical background workload.
-*   **Compensated Thread Sleeping**: The main runtime loops calculate execution delta time and subtract it from the loop sleep interval to maintain a stable frequency (e.g., $1.0\text{s} - t_{\text{execution}}$).
+*   **Compensated Thread Sleeping**: The main runtime loops calculate execution delta time and subtract it from the loop sleep interval to maintain a stable frequency (e.g., `1.0s - execution_time`).
 
 ---
 
@@ -117,7 +117,7 @@ self.current_lead_time = latest_event - earliest_valid
 Here are the potential areas of friction if a candidate presents this project as an enterprise-grade or fully-integrated system:
 
 *   **The "GNN-Controlled Cooling" Claim**: Claiming a GNN orchestrates the fan speed is exaggerated. The GNN is a mathematical average of spatial nodes in the live runtime. The actual neural network is a proof-of-concept script running offline on synthetic data.
-*   **The "<1ms Control Loop Latency" Claim**: While the model inference takes $<1\text{ms}$, the end-to-end telemetry loop takes $>100\text{ms}$ due to subprocess overhead. In the benchmarks (`runtime_benchmarks.py`), this was hidden by passing a pre-defined static dictionary and skipping `collect_telemetry()`.
+*   **The "<1ms Control Loop Latency" Claim**: While the model inference takes `<1ms`, the end-to-end telemetry loop takes `>100ms` due to subprocess overhead. In the benchmarks (`runtime_benchmarks.py`), this was hidden by passing a pre-defined static dictionary and skipping `collect_telemetry()`.
 *   **The "90%+ Throttling Reduction" Metric**: This metric is derived from the thermal simulator which cheats by looking ahead at the future dataframe indexes. It cannot be defended as a real-world result.
 
 ---

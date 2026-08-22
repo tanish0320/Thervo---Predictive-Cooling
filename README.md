@@ -77,7 +77,9 @@ The XAI layer explains **WHY** cooling increased, decreased, activated, or remai
 
 ### XAI Processing Flow
 
-$$\text{Telemetry} \longrightarrow \text{Feature Engineering} \longrightarrow \text{Thermal Context} \longrightarrow \text{Risk Prediction} \longrightarrow \text{Cooling Decision} \longrightarrow \text{XAI Explanation}$$
+```text
+Telemetry -> Feature Engineering -> Thermal Context -> Risk Prediction -> Cooling Decision -> XAI Explanation
+```
 
 ### Example Operator Explanation
 
@@ -105,41 +107,72 @@ The ML pipeline fuses two complementary models:
 
 ## 8. GNN Thermal Propagation
 
-To maintain low-latency production execution, the system uses a deterministic Analytic GNN formula on the inference path:
+To maintain low-latency production execution, the system uses a deterministic analytic GNN formula on the inference path.
 
-$$\text{neighbor\_heat} = \text{mean}(\text{heat\_norm of adjacent racks})$$
-$$\text{gnn\_embedding} = \text{clip}(0.7 \cdot \text{self\_heat} + 0.3 \cdot \text{neighbor\_heat}, 0.0, 1.0)$$
+For each rack:
 
-Experimental PyTorch Geometric (PyG) GraphSAGE research models are kept isolated in `training/research/`.
+```text
+neighbor_heat = mean(heat_norm of adjacent racks)
+
+gnn_embedding =
+    clip(
+        0.7 * self_heat +
+        0.3 * neighbor_heat,
+        0.0,
+        1.0
+    )
+```
+
+**Characteristics:**
+- **70% contribution** from the rack's own inferred thermal workload (`self_heat`)
+- **30% contribution** from neighboring rack thermal context (`neighbor_heat`)
+- **Output range:** Bounded strictly to `[0, 1]`
+- **Deterministic & Low Latency:** Direct mathematical aggregation without PyTorch runtime overhead on the production inference path
+
+Experimental PyTorch Geometric (PyG) GraphSAGE research models are isolated under `training/research/` and are not part of production inference.
 
 ---
 
 ## 9. XGBoost Standard Configuration
 
-- `n_estimators`: `30`
-- `learning_rate`: `0.1`
-- `max_depth`: `4`
-- `base_score`: `0.18`
-- `output`: Continuous risk score bounded strictly in `[0, 1]`
+The XGBoost model produces a continuous thermal-risk prediction which is combined with topology-aware thermal context.
+
+| Parameter | Value |
+| :--- | ---: |
+| `n_estimators` | 30 |
+| `learning_rate` | 0.1 |
+| `max_depth` | 4 |
+| `base_score` | 0.18 |
+| Output range | `[0, 1]` |
 
 ---
 
 ## 10. Risk Scoring & Composite Fusion
 
-The canonical fusion formula combines local workload prediction and spatial graph context:
+The canonical risk score combines local workload prediction with spatial thermal context:
 
-$$\text{composite\_risk} = \text{clip}(0.75 \cdot \text{xgb\_score} + 0.25 \cdot \text{gnn\_embedding}, 0.0, 1.0)$$
+```text
+composite_risk =
+    0.75 * xgb_prediction +
+    0.25 * gnn_embedding
+```
+
+The final risk score is bounded to `[0, 1]`.
 
 ### Risk Classification Levels
 
-| Level | Composite Risk Range | Action Description |
-| :--- | :--- | :--- |
+| Risk Level | Score | Action Description |
+| :--- | ---: | :--- |
 | **LOW** | `< 0.35` | Baseline nominal operations |
-| **MEDIUM** | `0.35 - < 0.55` | Elevated workload monitoring |
-| **HIGH** | `0.55 - < 0.75` | Proactive cooling preparation |
+| **MEDIUM** | `0.35 – < 0.55` | Elevated workload monitoring |
+| **HIGH** | `0.55 – < 0.75` | Proactive cooling preparation |
 | **CRITICAL** | `>= 0.75` | Maximum active cooling actuation |
 
-- **Automatic Cooling Action Threshold:** `0.72`
+**Automatic Cooling Action Threshold:**
+
+```text
+composite_risk >= 0.72
+```
 
 ---
 

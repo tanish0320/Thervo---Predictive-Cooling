@@ -60,8 +60,8 @@ The XAI engine evaluates the transition from the previous inference cycle to the
 4. **Why cooling was released** — Documents risk dropping below threshold and returning to nominal state.
 5. **Why cooling remained unchanged** — Explains stable workload equilibrium.
 6. **Which telemetry signals contributed** — Ranks primary contributors (CPU, GPU, Memory, Disk, Net).
-7. **How workload changes affected inferred heat proxy** — Quantifies heat proxy shift (\(0.6 \cdot \text{CPU} + 0.4 \cdot \text{GPU}\)).
-8. **How neighboring racks affected thermal risk** — Details spatial influence via Analytic GNN (\(0.7 \cdot \text{Self} + 0.3 \cdot \text{Neighbor}\)).
+7. **How workload changes affected inferred heat proxy** — Quantifies heat proxy shift (`0.6 * CPU + 0.4 * GPU`).
+8. **How neighboring racks affected thermal risk** — Details spatial influence via Analytic GNN (`0.7 * Self + 0.3 * Neighbor`).
 9. **How predicted risk score transitioned** — Shows risk score movement (e.g. 68% → 77%).
 10. **Manual override actions** — Explicitly distinguishes operator intervention from AI automation.
 
@@ -71,8 +71,10 @@ The XAI engine evaluates the transition from the previous inference cycle to the
 
 For each workload telemetry signal, the explainer calculates absolute change, percentage change, and direction:
 
-$$\text{delta} = x_{\text{current}} - x_{\text{previous}}$$
-$$\text{pct\_change} = \left( \frac{\text{delta}}{x_{\text{previous}}} \right) \times 100\%$$
+```text
+delta = current_val - previous_val
+pct_change = (delta / previous_val) * 100
+```
 
 To prevent noisy explanations, the system filters out minor signal jitter (below 0.5% delta) and ranks top contributors by magnitude.
 
@@ -82,7 +84,9 @@ To prevent noisy explanations, the system filters out minor signal jitter (below
 
 Because physical temperature sensors are not required, thermal load is inferred deterministically:
 
-$$\text{heat\_norm} = 0.6 \cdot \text{cpu\_norm} + 0.4 \cdot \text{gpu\_norm}$$
+```text
+heat_norm = 0.6 * cpu_norm + 0.4 * gpu_norm
+```
 
 The explainer isolates how GPU and CPU changes drove the heat proxy:
 - *Example:* "Inferred heat proxy increased 12.1% primarily due to increased GPU (+18.4%) and CPU (+9.7%) workload."
@@ -93,7 +97,9 @@ The explainer isolates how GPU and CPU changes drove the heat proxy:
 
 Spatial heat accumulation is modeled using a lightweight topology formula:
 
-$$\text{gnn\_embedding} = 0.7 \cdot \text{self\_heat} + 0.3 \cdot \text{neighbor\_heat}$$
+```text
+gnn_embedding = 0.7 * self_heat + 0.3 * neighbor_heat
+```
 
 - **Self Thermal Contribution:** 70% weight
 - **Neighbor Thermal Contribution:** 30% weight
